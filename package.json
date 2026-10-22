@@ -1,0 +1,8 @@
+{
+  "name": "performance",
+  "private": true,
+  "description": "Performance — daily schedule, streak, training and stats (web app). The site is the public/ folder; functions/ are Cloudflare Pages Functions.",
+  "dependencies": {
+    "ical.js": "2.1.0"
+  }
+}

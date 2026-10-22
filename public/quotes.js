@@ -1,0 +1,48 @@
+/* One quote or fact per day, cycling through the list. */
+export const QUOTES = [
+  { kind: 'FACT', text: "It takes an average of 66 days of repetition before a new habit becomes automatic.", source: "Lally et al., University College London, 2009" },
+  { kind: 'QUOTE', text: "You do not rise to the level of your goals. You fall to the level of your systems.", source: "James Clear, Atomic Habits" },
+  { kind: 'QUOTE', text: "The impediment to action advances action. What stands in the way becomes the way.", source: "Marcus Aurelius, Meditations" },
+  { kind: 'FACT', text: "Just having your phone on the desk — even face down and switched off — measurably reduces your working memory and focus.", source: "Ward et al., Journal of the Association for Consumer Research, 2017" },
+  { kind: 'QUOTE', text: "Hard work beats talent when talent doesn't work hard.", source: "Tim Notke" },
+  { kind: 'QUOTE', text: "All of humanity's problems stem from man's inability to sit quietly in a room alone.", source: "Blaise Pascal, Pensées" },
+  { kind: 'FACT', text: "After an interruption, it takes on average about 23 minutes to fully get back to the original task.", source: "Gloria Mark, University of California, Irvine" },
+  { kind: 'QUOTE', text: "Pressure is a privilege.", source: "Billie Jean King" },
+  { kind: 'QUOTE', text: "Fall seven times, stand up eight.", source: "Japanese proverb" },
+  { kind: 'FACT', text: "People who wrote down exactly when and where they would exercise were 91% likely to do it, against 35–38% for those who didn't.", source: "Milne, Orbell & Sheeran, 2002" },
+  { kind: 'QUOTE', text: "He who has a why to live can bear almost any how.", source: "Friedrich Nietzsche" },
+  { kind: 'QUOTE', text: "Inspiration is for amateurs — the rest of us just show up and get to work.", source: "Chuck Close" },
+  { kind: 'FACT', text: "Two weeks of sleeping 6 hours a night impairs performance as much as a full night without sleep — and people barely notice it.", source: "Van Dongen et al., Sleep, 2003" },
+  { kind: 'QUOTE', text: "We suffer more often in imagination than in reality.", source: "Seneca, Letters to Lucilius" },
+  { kind: 'QUOTE', text: "I hated every minute of training, but I said, don't quit. Suffer now and live the rest of your life as a champion.", source: "Muhammad Ali" },
+  { kind: 'FACT', text: "Testing yourself on material beats re-reading it: students who practised recall remembered far more a week later.", source: "Roediger & Karpicke, Psychological Science, 2006" },
+  { kind: 'QUOTE', text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.", source: "Will Durant, on Aristotle" },
+  { kind: 'QUOTE', text: "Discipline is the bridge between goals and accomplishment.", source: "Jim Rohn" },
+  { kind: 'FACT', text: "Switching between tasks can cost up to 40% of your productive time.", source: "American Psychological Association, after Rubinstein, Meyer & Evans, 2001" },
+  { kind: 'QUOTE', text: "I am not afraid of storms, for I am learning how to sail my ship.", source: "Louisa May Alcott, Little Women" },
+  { kind: 'QUOTE', text: "Our greatest glory is not in never falling, but in rising every time we fall.", source: "Oliver Goldsmith" },
+  { kind: 'FACT', text: "In one study, most men chose to give themselves electric shocks rather than sit alone with their thoughts for 15 minutes. Learn to be comfortable alone.", source: "Wilson et al., Science, 2014" },
+  { kind: 'QUOTE', text: "Everybody has a plan until they get punched in the mouth.", source: "Mike Tyson" },
+  { kind: 'QUOTE', text: "Well done is better than well said.", source: "Benjamin Franklin" },
+  { kind: 'FACT', text: "A year of regular aerobic exercise grew the brain's memory centre, the hippocampus, by about 2%.", source: "Erickson et al., PNAS, 2011" },
+  { kind: 'QUOTE', text: "Do what you can, with what you have, where you are.", source: "Theodore Roosevelt" },
+  { kind: 'QUOTE', text: "It does not matter how slowly you go as long as you do not stop.", source: "Attributed to Confucius" },
+  { kind: 'FACT', text: "Spacing your study sessions out over days beats cramming the same hours into one session.", source: "Cepeda et al., Psychological Bulletin, 2006" },
+  { kind: 'QUOTE', text: "Talent is cheaper than table salt. What separates the talented individual from the successful one is a lot of hard work.", source: "Stephen King" },
+  { kind: 'QUOTE', text: "Suffer the pain of discipline or suffer the pain of regret.", source: "Attributed to Jim Rohn" },
+  { kind: 'FACT', text: "The best violinists had practised alone, deliberately, for around 10,000 hours by age 20 — thousands more than good ones.", source: "Ericsson, Krampe & Tesch-Römer, 1993" },
+  { kind: 'QUOTE', text: "Embrace the suck.", source: "U.S. military saying" },
+  { kind: 'QUOTE', text: "Motivation is what gets you started. Habit is what keeps you going.", source: "Jim Ryun" },
+  { kind: 'QUOTE', text: "Whether you think you can, or you think you can't — you're right.", source: "Attributed to Henry Ford" },
+  { kind: 'QUOTE', text: "Energy and persistence conquer all things.", source: "Benjamin Franklin" },
+  { kind: 'QUOTE', text: "The successful warrior is the average man, with laser-like focus.", source: "Attributed to Bruce Lee" },
+  { kind: 'QUOTE', text: "Don't count the days. Make the days count.", source: "Attributed to Muhammad Ali" },
+  { kind: 'QUOTE', text: "The best time to plant a tree was 20 years ago. The second best time is now.", source: "Proverb" },
+  { kind: 'QUOTE', text: "If you're going through hell, keep going.", source: "Attributed to Winston Churchill" },
+  { kind: 'QUOTE', text: "A goal without a plan is just a wish.", source: "Attributed to Antoine de Saint-Exupéry" },
+];
+
+export function quoteFor(day) {
+  const n = Math.floor(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 864e5);
+  return QUOTES[n % QUOTES.length];
+}

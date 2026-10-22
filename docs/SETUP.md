@@ -1,0 +1,150 @@
+# Putting Performance online — step by step
+
+Everything here is **free, no card**. You do it once (about 30–40 minutes). After that, every
+change goes live by itself when you push with GitHub Desktop, like #Foodie.
+
+You'll set up four things, in this order:
+
+1. **GitHub** — keeps the code (same as #Foodie)
+2. **Supabase** — keeps your data and syncs phone ↔ computer
+3. **Cloudflare Pages** — puts the app online (never sleeps, opens instantly)
+4. **Your iPhone** — install the app, connect your calendar, and add the Santé Shortcut
+
+---
+
+## 1. GitHub
+
+1. Open **GitHub Desktop** → **File → Add Local Repository…** → choose the
+   `~/Work/claude/PerformanceApp` folder.
+2. It will say it's not a repository yet → click **create a repository** → **Create Repository**.
+3. Click **Publish repository**. Keep **"Keep this code private"** ticked → **Publish**.
+
+## 2. Supabase
+
+You can have 2 free projects; #Foodie uses one, so this will be your second.
+
+1. Go to **supabase.com → Dashboard → New project**. Name it `performance`, choose a database
+   password (save it in your password manager), region **West EU (Paris)** → **Create**.
+2. When it's ready: **SQL Editor → New query**, paste everything in `supabase/schema.sql`,
+   click **Run**. You should see "Success. No rows returned".
+3. **Authentication → Sign In / Providers → Email**: turn **off "Confirm email"** → Save.
+   (Otherwise you'd have to click a link in an email before your first sign-in.)
+4. **Project Settings → API Keys**. Copy:
+   - the **Project URL** (looks like `https://abcd1234.supabase.co`)
+   - the **Publishable key** (starts with `sb_publishable_`)
+   - the **Secret key** (starts with `sb_secret_`) — **never put this one in the code**,
+     only in Cloudflare (step 3).
+5. Open `public/config.js` and paste the URL and the publishable key between the quotes.
+   Commit + push in GitHub Desktop.
+
+> A free Supabase project pauses after **7 days without anyone opening the app**. Using it daily
+> keeps it awake. If it ever pauses, open the Supabase dashboard and click **Restore** — nothing is lost.
+
+## 3. Cloudflare Pages
+
+1. Go to **dash.cloudflare.com** and create a free account.
+2. **Workers & Pages → Create → Pages → Connect to Git** → connect GitHub → pick the
+   `PerformanceApp` repository → **Begin setup**.
+3. Build settings:
+   - **Framework preset:** None
+   - **Build command:** `npm install`
+   - **Build output directory:** `public`
+4. Open **Environment variables (advanced)** and add these (tick **Encrypt** on the secret ones):
+
+   | Name | Value |
+   |---|---|
+   | `SUPABASE_URL` | your Project URL |
+   | `SUPABASE_PUBLISHABLE_KEY` | your publishable key |
+   | `SUPABASE_SECRET_KEY` 🔒 | your secret key |
+   | `HEALTH_KEY` 🔒 | a long random password for the Santé Shortcut (see below) |
+   | `CALENDAR_URLS` | leave empty for now (step 4.3) |
+   | `TIMEZONE` | `Europe/Paris` |
+   | `OWNER_USER_ID` | leave empty for now (step 4.2) |
+
+   To make the `HEALTH_KEY`, paste this in Terminal and copy what it prints:
+
+   ```bash
+   openssl rand -hex 24
+   ```
+
+5. **Save and Deploy.** After about a minute you get your address, like
+   `https://performance-xyz.pages.dev`. That's your app.
+
+When you change a variable later: **Settings → Variables and Secrets**, then
+**Deployments → ⋯ on the latest → Retry deployment** so it takes effect.
+
+## 4. Your iPhone and Mac
+
+### 4.1 Install it
+
+- **iPhone:** open your `pages.dev` address in **Safari** → **Create account** (email + a password
+  of 8+ characters) → tap **Share** → **Add to Home Screen** → **Add**. Open it from the flame icon
+  from now on.
+- **Mac:** open the same address in **Safari** → sign in → **File → Add to Dock**.
+
+### 4.2 Lock it to your account
+
+1. Supabase → **Authentication → Users** → click your account → copy the **User UID**.
+2. Cloudflare → put it in **`OWNER_USER_ID`** → retry the deployment.
+3. Supabase → **Authentication → Sign In / Providers** → turn **off "Allow new users to sign up"**.
+
+Now nobody else can create an account or read your calendar and Santé numbers.
+
+### 4.3 Connect your calendar
+
+The app reads your calendar through a private link to it.
+
+- **iCloud calendar (Apple Calendar):** iPhone **Calendar** app → **Calendars** → tap **ⓘ** next
+  to the calendar → turn on **Public Calendar** → **Share Link… → Copy**.
+  Do this for each calendar you want on the Today page.
+- **Google Calendar:** calendar.google.com on a computer → ⚙️ **Settings** → click the calendar →
+  **Integrate calendar** → copy **Secret address in iCal format**.
+
+Paste the links into **`CALENDAR_URLS`** in Cloudflare, separated by a space, and retry the deployment.
+
+> "Public" means anyone who has that exact link can see the calendar. The link is long and random,
+> it's only stored in Cloudflare, and you can turn it off any time (which also changes it).
+> New events appear in the app within about 5 minutes.
+
+### 4.4 The Santé Shortcut
+
+A website can't read Santé, so a Shortcut on your iPhone sends yesterday's numbers to the app once a day.
+
+Open the **Shortcuts** app → **+** → name it **Send Santé**. Add these actions:
+
+1. **Find Health Samples** — Type **Steps**, Start Date **is yesterday**, tap **Show More** → Group By **Day**.
+   Then **Get Details of Health Samples** → **Value**. Long-press the result → **Rename** → `Steps`.
+2. Same again for **Walking + Running Distance** → rename `Distance`.
+3. Same again for **Active Energy** → `Energy`.
+4. Same again for **Resting Heart Rate** → `Resting`.
+5. Same again for **Flights Climbed** → `Flights`.
+6. **Find Health Samples** — Type **Sleep Analysis**, Start Date **is yesterday**, Value **is Asleep**.
+   Then **Get Details of Health Samples** → **Duration**, then **Calculate Statistics** → **Sum** → rename `Sleep`.
+7. **Adjust Date** → subtract **1 day** from **Current Date**, then **Format Date** → Custom → `yyyy-MM-dd`
+   → rename `Day`.
+8. **Get Contents of URL** — `https://YOUR-ADDRESS.pages.dev/api/health`
+   - Method **POST**
+   - Headers: `Authorization` = `Bearer ` followed by your `HEALTH_KEY`
+   - Request Body **JSON**, with these keys (each one a Text set to the matching variable):
+     `day` → Day, `steps` → Steps, `distance` → Distance, `energy` → Energy,
+     `resting_hr` → Resting, `sleep` → Sleep, `flights` → Flights
+9. Tap ▶ once to test. It should answer `{"saved":"2026-…"}` and allow access to Santé when asked.
+
+Then make it run by itself: **Automation** tab → **+** → **Time of Day** → pick a time you're
+usually using your phone (e.g. **12:30**), **Daily** → **Run Immediately** → choose **Send Santé**.
+
+> iOS can't read Santé while the iPhone is locked. If a day's numbers are missing, just run the
+> Shortcut by hand. A missed day doesn't distort the averages, because the averages only count days
+> that arrived.
+
+---
+
+## If something doesn't work
+
+- **Stuck on "Syncing"** → check `public/config.js` has the right URL and publishable key.
+- **Calendar says "No calendar access"** → `OWNER_USER_ID` doesn't match your account, or a link in
+  `CALENDAR_URLS` is wrong.
+- **Shortcut answers `unauthorized`** → the `HEALTH_KEY` in the Shortcut and in Cloudflare differ
+  (check there's exactly one space after `Bearer`).
+- **An update doesn't show up** → close and reopen the app twice. It always opens instantly from the
+  copy saved on the phone and quietly fetches the new version for next time.

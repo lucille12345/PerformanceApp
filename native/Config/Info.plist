@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Shows today's events from your calendar on the Today page.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Reads your daily activity from Santé to show it in Stats.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Syncs your data between your iPhone and your Mac over Wi-Fi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_perfsync._tcp</string>
+	</array>
+</dict>
+</plist>
