@@ -1,4 +1,4 @@
-/* POST /api/health — called once a night by the iPhone Shortcut with the day's Santé numbers.
+/* POST /api/health — called every evening by the iPhone Shortcut with today's Santé numbers.
    Header:  Authorization: Bearer <HEALTH_KEY>
    Body:    { "day": "2026-10-21", "steps": 8412, "distance": 6.1, "energy": 412,
               "resting_hr": 58, "sleep": 7.2, "flights": 9 }
@@ -22,9 +22,10 @@ export async function onRequestPost({ request, env }) {
   let b;
   try { b = await request.json(); } catch { return json({ error: 'send JSON' }, 400); }
 
-  // Default: yesterday, in your time zone.
-  const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: env.TIMEZONE || 'Europe/Paris' }).format(Date.now() - 864e5);
-  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').trim()) ? String(b.day).trim() : yesterday;
+  // No date (or one that isn't YYYY-MM-DD): today, in your time zone. The Shortcut runs in the evening
+  // with "est aujourd'hui" filters, so it sends today's numbers.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: env.TIMEZONE || 'Europe/Paris' }).format(Date.now());
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(b.day || '').trim()) ? String(b.day).trim() : today;
 
   const row = {
     user_id: env.OWNER_USER_ID, day,
