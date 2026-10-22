@@ -7,6 +7,7 @@
    ============================================================================ */
 import * as L from './logic.js';
 import { quoteFor } from './quotes.js';
+import { holidaysOn, KINDS } from './holidays.js';
 import * as Cloud from './cloud.js';
 
 // ---------- storage ----------
@@ -20,6 +21,7 @@ function keep(key, value) {
 let data = L.housekeep(load('perf-data', L.emptyData()));
 let health = load('perf-health', []);            // nightly rows sent by the Santé Shortcut
 let events = load('perf-events', { day: null, list: [], denied: false });
+let birthdays = load('perf-birthdays', []);      // from Contacts, sent by the iPhone Shortcut
 let now = new Date();
 
 const ui = {
@@ -63,6 +65,8 @@ const I = {
   plus: '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
+  cake: '<path d="M4 21h16M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M5 16c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 5 0M12 12V8M12 5.5c-.8-.8-.8-2 0-3 .8 1 .8 2.2 0 3z"/>',
+  star: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
   heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.3C1 8.2 3.2 4.5 6.8 4.5c2.1 0 3.6 1.1 5.2 3 1.6-1.9 3.1-3 5.2-3 3.6 0 5.8 3.7 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>',
   sport: {
     run: '<circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 12l3-3 4 1 3 3 3 1"/>',
@@ -184,23 +188,39 @@ function renderToday() {
   </section>`;
 }
 
+/** Birthdays from Contacts on this date (29 February birthdays show on the 28th in other years). */
+function birthdaysOn(d) {
+  const m = d.getMonth() + 1, day = d.getDate();
+  const leap = new Date(d.getFullYear(), 1, 29).getDate() === 29;
+  return birthdays.filter((b) => (b.month === m && b.day === day) || (!leap && m === 2 && day === 28 && b.month === 2 && b.day === 29))
+    .map((b) => ({ name: b.name, age: b.year ? d.getFullYear() - b.year : null }));
+}
+
 function renderCalendar() {
-  const list = events.day === L.dayKey(new Date()) ? events.list : [];
-  const max = 4;
+  const now = new Date();
+  const list = events.day === L.dayKey(now) ? events.list : [];
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   // calshow: opens Calendar on iPhone at that moment; ical:// opens Calendar on the Mac.
   const href = (e) => (ios ? `calshow:${Math.floor((e ? e.start : Date.now()) / 1000) - 978307200}` : 'ical://');
-  const row = (color, time, title, e) => `<a class="ev" href="${href(e)}"><b style="background:${color}"></b>${time ? `<span class="t">${time}</span>` : ''}<span class="n">${esc(title)}</span>${I.right}</a>`;
-  let body;
-  if (!Cloud.state().enabled) body = row('var(--faint)', '', 'Not connected', null);
-  else if (events.denied) body = row('var(--faint)', '', 'No calendar access', null);
-  else if (!list.length) body = row('var(--faint)', '', 'Nothing today', null);
-  else {
-    body = list.slice(0, max).map((e) => row(/^#[0-9a-f]{3,8}$/i.test(e.color || '') ? e.color : 'var(--accent)', e.allDay ? 'ALL' : hhmm(new Date(e.start)), e.title, e)).join('');
+  const row = (color, lead, title, e) => `<a class="ev" href="${href(e)}"><b style="background:${color}"></b>${lead ? `<span class="t">${lead}</span>` : ''}<span class="n">${esc(title)}</span>${I.right}</a>`;
+  const specialRow = (color, icon, iconLabel, title) => `<a class="ev sp" href="${href(null)}"><b style="background:${color}"></b>
+    <svg viewBox="0 0 24 24" class="ico" style="color:${color}" role="img" aria-label="${iconLabel}">${icon}</svg><span class="n">${esc(title)}</span></a>`;
+
+  // Birthdays and celebration days first, then the calendar's own events.
+  const special = [
+    ...birthdaysOn(now).map((b) => specialRow('#FF6F8A', I.cake, 'Birthday', b.age != null ? `${b.name} · ${b.age}` : b.name)),
+    ...holidaysOn(now).map((h) => specialRow(KINDS[h.kind].color, I.star, KINDS[h.kind].label, h.name)),
+  ];
+  const max = Math.max(2, 5 - special.length);
+  let body = special.join('');
+  if (Cloud.state().enabled && events.denied) body += row('var(--faint)', '', 'No calendar access', null);
+  else if (list.length) {
+    body += list.slice(0, max).map((e) => row(/^#[0-9a-f]{3,8}$/i.test(e.color || '') ? e.color : 'var(--accent)', e.allDay ? 'ALL' : hhmm(new Date(e.start)), e.title, e)).join('');
     if (list.length > max) body += row('var(--faint)', '', `+${list.length - max} more`, null);
-  }
+  } else if (!special.length) body += row('var(--faint)', '', Cloud.state().enabled ? 'Nothing today' : 'Not connected', null);
+  const n = list.length + special.length;
   return `<section class="card cal">
-    <div class="row-head">${label('CALENDAR')}${list.length ? `<span class="small">${list.length} event${list.length > 1 ? 's' : ''}</span>` : ''}</div>
+    <div class="row-head">${label('CALENDAR')}${n ? `<span class="small">${n} today</span>` : ''}</div>
     ${body}
   </section>`;
 }
@@ -634,6 +654,7 @@ Cloud.start({
   onRemote: receive,
   onHealth: (rows) => { health = rows; keep('perf-health', rows); if (ui.tab === 'stats') render(); },
   onEvents: (ev) => { events = ev; keep('perf-events', ev); if (ui.tab === 'today') render(); },
+  onBirthdays: (rows) => { birthdays = rows; keep('perf-birthdays', rows); if (ui.tab === 'today') render(); },
   onChange: () => render(),
 });
 

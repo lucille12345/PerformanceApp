@@ -82,6 +82,12 @@ export async function refresh() {
   setStatus('synced');
   loadHealth();
   loadEvents();
+  loadBirthdays();
+}
+
+async function loadBirthdays() {
+  const { data, error } = await client.from('perf_birthdays').select('name,month,day,year').eq('user_id', session.user.id);
+  if (!error && data) handlers.onBirthdays?.(data);
 }
 
 /** Save to the cloud half a second after the last change. */

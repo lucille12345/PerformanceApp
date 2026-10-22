@@ -2,9 +2,9 @@
    Opens INSTANTLY: the app is always served from the copy saved on the device,
    and a fresh copy is fetched in the background for the next opening.
    Bump CACHE when files are added to SHELL. */
-const CACHE = 'perf-v1';
+const CACHE = 'perf-v2';
 const SHELL = [
-  './', './index.html', './styles.css', './app.js', './logic.js', './quotes.js', './cloud.js', './config.js',
+  './', './index.html', './styles.css', './app.js', './logic.js', './quotes.js', './holidays.js', './cloud.js', './config.js',
   './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
 // Libraries and fonts never change at a given address, so a saved copy is always right.

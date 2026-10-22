@@ -95,6 +95,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ev .t { font-family: var(--num); font-size: 16px; font-weight: 700; width: 42px; flex: none; }
 .ev .n { font-size: 14px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .ico { width: 13px; height: 13px; color: var(--dim); flex: none; }
+.ev.sp { gap: 8px; }
+.ev.sp .ico { width: 16px; height: 16px; stroke-width: 2; }
+.ev.sp .n { white-space: normal; line-height: 1.25; }
 
 .streak { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 14px 6px; }
 .streak::before { content: ''; position: absolute; width: 150px; height: 150px; top: 0; left: 50%; margin-left: -75px; border-radius: 50%;

@@ -4,7 +4,7 @@
               "resting_hr": 58, "sleep": 7.2, "flights": 9 }
    Every field is optional; numbers may arrive as text ("8 412", "6,1"). Sending the same day
    again just replaces it. */
-import { json, sameSecret } from './http.js';
+import { adminHeaders, checkShortcutKey, json } from './http.js';
 
 const num = (v) => {
   if (v == null || v === '') return null;
@@ -16,14 +16,8 @@ const num = (v) => {
 const hours = (v) => (v == null ? null : v > 1440 ? v / 3600 : v > 24 ? v / 60 : v);
 
 export async function onRequestPost({ request, env }) {
-  const key = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const expected = (env.HEALTH_KEY || '').trim();
-  if (!expected) return json({ error: 'HEALTH_KEY is not set in Cloudflare' }, 500);
-  if (!sameSecret(key, expected)) {
-    // Saying how long the stored key is (never what it is) makes a bad paste easy to spot.
-    return json({ error: 'unauthorized', ...(key.length !== expected.length && { storedKeyLength: expected.length }) }, 401);
-  }
-  if (!env.OWNER_USER_ID || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return json({ error: 'not configured' }, 500);
+  const denied = checkShortcutKey(request, env);
+  if (denied) return denied;
 
   let b;
   try { b = await request.json(); } catch { return json({ error: 'send JSON' }, 400); }
@@ -39,8 +33,7 @@ export async function onRequestPost({ request, env }) {
     updated_at: new Date().toISOString(),
   };
 
-  const headers = { apikey: env.SUPABASE_SECRET_KEY, 'content-type': 'application/json', Prefer: 'resolution=merge-duplicates' };
-  if (env.SUPABASE_SECRET_KEY.startsWith('eyJ')) headers.Authorization = `Bearer ${env.SUPABASE_SECRET_KEY}`; // older "service_role" keys
+  const headers = adminHeaders(env, { Prefer: 'resolution=merge-duplicates' });
   const r = await fetch(`${env.SUPABASE_URL}/rest/v1/perf_health?on_conflict=user_id,day`, { method: 'POST', headers, body: JSON.stringify(row) });
   if (!r.ok) return json({ error: 'could not save', detail: await r.text() }, 502);
   return json({ saved: day });

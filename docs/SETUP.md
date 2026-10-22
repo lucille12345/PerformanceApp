@@ -110,7 +110,7 @@ Open the **Shortcuts** app → **+** → name it **Send Santé**. Add these acti
    Then **Get Details of Health Samples** → **Duration**, then **Calculate Statistics** → **Sum** → rename `Sleep`.
 7. **Adjust Date** → subtract **1 day** from **Current Date**, then **Format Date** → Custom → `yyyy-MM-dd`
    → rename `Day`.
-8. **Get Contents of URL** — `https://YOUR-ADDRESS.workers.dev/api/health`
+8. **Get Contents of URL** — `https://performance-app.llucillespam.workers.dev/api/health`
    - Method **POST**
    - Headers: `Authorization` = `Bearer ` followed by your `HEALTH_KEY`
    - Request Body **JSON**, with these keys (each one a Text set to the matching variable):
@@ -124,6 +124,34 @@ usually using your phone (e.g. **12:30**), **Daily** → **Run Immediately** →
 > iOS can't read Santé while the iPhone is locked. If a day's numbers are missing, just run the
 > Shortcut by hand. A missed day doesn't distort the averages, because the averages only count days
 > that arrived.
+
+### 4.5 Birthdays from Contacts
+
+A website can't open Contacts either, so a second Shortcut sends the list of birthdays once a week.
+(First time only: run `supabase/birthdays.sql` in Supabase's SQL Editor.)
+
+**Shortcuts** app → **+** → name it **Send birthdays**:
+
+1. **Find Contacts**: no filter, turn **Limit** off (so it finds all of them).
+2. **Repeat with Each** (item in Contacts). Inside the repeat:
+   1. **Get Details of Contacts** → **Birthday** (of *Repeat Item*).
+   2. **If** *Birthday* **has any value**:
+      - **Format Date** → *Birthday* → Custom → `yyyy-MM-dd`
+      - **Text** → *Repeat Item* (tap it → **Name**), then type `|`, then *Formatted Date*
+        (looks like `Marie Dupont|1998-12-08`)
+      - **Add to Variable** → name `Lines`
+   3. **End If**
+3. After **End Repeat**: **Combine Text** → *Lines* → with **New Lines**.
+4. **Get Contents of URL**: `https://performance-app.llucillespam.workers.dev/api/birthdays`
+   - Method **POST**, Headers `Authorization` = `Bearer ` + your `HEALTH_KEY`
+   - Request Body **JSON**: key `list` → *Combined Text*
+5. Tap ▶. It should answer `{"saved":…}` with the number of birthdays, and ask once for access to Contacts.
+
+**Automation** tab → **+** → **Time of Day** → **Weekly**, Sunday 12:00 → **Run Immediately** →
+**Send birthdays**. New contacts appear in the app after the next Sunday (or run it by hand).
+
+> Names and birthdays are stored in your own Supabase database, readable only by your account.
+> Contacts saved without a birth year show without an age.
 
 ---
 
