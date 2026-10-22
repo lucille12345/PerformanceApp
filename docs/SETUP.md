@@ -7,7 +7,7 @@ You'll set up four things, in this order:
 
 1. **GitHub** — keeps the code (same as #Foodie)
 2. **Supabase** — keeps your data and syncs phone ↔ computer
-3. **Cloudflare Pages** — puts the app online (never sleeps, opens instantly)
+3. **Cloudflare** — puts the app online as a Worker (never sleeps, opens instantly)
 4. **Your iPhone** — install the app, connect your calendar, and add the Santé Shortcut
 
 ---
@@ -40,44 +40,33 @@ You can have 2 free projects; #Foodie uses one, so this will be your second.
 > A free Supabase project pauses after **7 days without anyone opening the app**. Using it daily
 > keeps it awake. If it ever pauses, open the Supabase dashboard and click **Restore** — nothing is lost.
 
-## 3. Cloudflare Pages
+## 3. Cloudflare
 
 1. Go to **dash.cloudflare.com** and create a free account.
-2. **Workers & Pages → Create → Pages → Connect to Git** → connect GitHub → pick the
-   `PerformanceApp` repository → **Begin setup**.
-3. Build settings:
-   - **Framework preset:** None
-   - **Build command:** `npm install`
-   - **Build output directory:** `public`
-4. Open **Environment variables (advanced)** and add these (tick **Encrypt** on the secret ones):
+2. **Workers & Pages → Create → Import a repository** → connect GitHub → pick `PerformanceApp`.
+   Name it `performance-app` (it must match `"name"` in `wrangler.jsonc`), leave the build command
+   empty and the deploy command as `npx wrangler deploy` → **Deploy**.
+3. When it's deployed: open the Worker → **Settings → Variables and Secrets → + Add** and add these.
+   Use type **Secret** for the 🔒 ones, **Text** for the others:
 
    | Name | Value |
    |---|---|
    | `SUPABASE_URL` | your Project URL |
    | `SUPABASE_PUBLISHABLE_KEY` | your publishable key |
    | `SUPABASE_SECRET_KEY` 🔒 | your secret key |
-   | `HEALTH_KEY` 🔒 | a long random password for the Santé Shortcut (see below) |
-   | `CALENDAR_URLS` | leave empty for now (step 4.3) |
+   | `HEALTH_KEY` 🔒 | the long random key in `health-key.txt` in this folder (never uploaded to GitHub) |
    | `TIMEZONE` | `Europe/Paris` |
-   | `OWNER_USER_ID` | leave empty for now (step 4.2) |
+   | `CALENDAR_URLS` | added in step 4.3 |
+   | `OWNER_USER_ID` | added in step 4.2 |
 
-   To make the `HEALTH_KEY`, paste this in Terminal and copy what it prints:
-
-   ```bash
-   openssl rand -hex 24
-   ```
-
-5. **Save and Deploy.** After about a minute you get your address, like
-   `https://performance-xyz.pages.dev`. That's your app.
-
-When you change a variable later: **Settings → Variables and Secrets**, then
-**Deployments → ⋯ on the latest → Retry deployment** so it takes effect.
+   Click **Deploy** after adding them. Changes to variables take effect right away. The app's address
+   is on the Worker's **Overview** page, something like `https://performance-app.YOUR-NAME.workers.dev`.
 
 ## 4. Your iPhone and Mac
 
 ### 4.1 Install it
 
-- **iPhone:** open your `pages.dev` address in **Safari** → **Create account** (email + a password
+- **iPhone:** open your `workers.dev` address in **Safari** → **Create account** (email + a password
   of 8+ characters) → tap **Share** → **Add to Home Screen** → **Add**. Open it from the flame icon
   from now on.
 - **Mac:** open the same address in **Safari** → sign in → **File → Add to Dock**.
@@ -85,7 +74,7 @@ When you change a variable later: **Settings → Variables and Secrets**, then
 ### 4.2 Lock it to your account
 
 1. Supabase → **Authentication → Users** → click your account → copy the **User UID**.
-2. Cloudflare → put it in **`OWNER_USER_ID`** → retry the deployment.
+2. Cloudflare → add **`OWNER_USER_ID`** with that value → **Deploy**.
 3. Supabase → **Authentication → Sign In / Providers** → turn **off "Allow new users to sign up"**.
 
 Now nobody else can create an account or read your calendar and Santé numbers.
@@ -100,7 +89,7 @@ The app reads your calendar through a private link to it.
 - **Google Calendar:** calendar.google.com on a computer → ⚙️ **Settings** → click the calendar →
   **Integrate calendar** → copy **Secret address in iCal format**.
 
-Paste the links into **`CALENDAR_URLS`** in Cloudflare, separated by a space, and retry the deployment.
+Paste the links into **`CALENDAR_URLS`** in Cloudflare, separated by a space, then click **Deploy**.
 
 > "Public" means anyone who has that exact link can see the calendar. The link is long and random,
 > it's only stored in Cloudflare, and you can turn it off any time (which also changes it).
@@ -122,7 +111,7 @@ Open the **Shortcuts** app → **+** → name it **Send Santé**. Add these acti
    Then **Get Details of Health Samples** → **Duration**, then **Calculate Statistics** → **Sum** → rename `Sleep`.
 7. **Adjust Date** → subtract **1 day** from **Current Date**, then **Format Date** → Custom → `yyyy-MM-dd`
    → rename `Day`.
-8. **Get Contents of URL** — `https://YOUR-ADDRESS.pages.dev/api/health`
+8. **Get Contents of URL** — `https://YOUR-ADDRESS.workers.dev/api/health`
    - Method **POST**
    - Headers: `Authorization` = `Bearer ` followed by your `HEALTH_KEY`
    - Request Body **JSON**, with these keys (each one a Text set to the matching variable):

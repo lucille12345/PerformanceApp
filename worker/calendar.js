@@ -3,7 +3,7 @@
    (iCloud "Public Calendar" or Google "Secret address in iCal format").
    Only the owner's signed-in account can call it. */
 import ICAL from 'ical.js';
-import { json, owner } from '../../lib/http.js';
+import { json, owner } from './http.js';
 
 export async function onRequestGet({ request, env }) {
   if (!(await owner(request, env))) return json({ error: 'unauthorized' }, 401);

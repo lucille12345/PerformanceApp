@@ -1,7 +1,8 @@
 # Performance — project memory
 
 Personal productivity + sport web app for Lucille. **Live stack:** static PWA in `public/` (no build step,
-ES modules) on **Cloudflare Pages**, data in **Supabase**, two Pages Functions in `functions/api/`.
+ES modules) served by a **Cloudflare Worker** (`worker/index.js` + `wrangler.jsonc`, static assets = `public/`,
+Worker name `performance-app` must match the dashboard), data in **Supabase**, `/api/calendar` + `/api/health` in `worker/`.
 `native/` = abandoned SwiftUI version (free Apple ID apps expire every 7 days) — don't touch unless asked.
 
 ## Rules that matter
@@ -14,7 +15,7 @@ ES modules) on **Cloudflare Pages**, data in **Supabase**, two Pages Functions i
   order-independent; devices write back only when the merged result differs (`receive` in `app.js`).
 - **Instant open:** `sw.js` serves the cached shell first and refreshes in the background. **Bump `CACHE`**
   in `sw.js` whenever `SHELL` changes.
-- Secrets live only in Cloudflare env vars (`SUPABASE_SECRET_KEY`, `HEALTH_KEY`, `CALENDAR_URLS`,
+- Secrets live only in Cloudflare Worker variables (`keep_vars: true` keeps them across deploys) (`SUPABASE_SECRET_KEY`, `HEALTH_KEY`, `CALENDAR_URLS`,
   `OWNER_USER_ID`). `config.js` holds only the publishable key.
 
 ## Test locally

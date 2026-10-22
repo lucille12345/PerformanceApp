@@ -4,7 +4,7 @@
               "resting_hr": 58, "sleep": 7.2, "flights": 9 }
    Every field is optional; numbers may arrive as text ("8 412", "6,1"). Sending the same day
    again just replaces it. */
-import { json, sameSecret } from '../../lib/http.js';
+import { json, sameSecret } from './http.js';
 
 const num = (v) => {
   if (v == null || v === '') return null;

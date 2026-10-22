@@ -23,7 +23,8 @@ browser only. Calendar and Santé need the online version.
 | `public/` | **The app itself**: what Cloudflare puts online |
 | `public/logic.js` | The rules: 2am reset, streak, monthly stats, 3-month cleanup, sync merging |
 | `public/config.js` | Supabase address + publishable key (safe to be public) |
-| `functions/api/` | Two small online helpers: `calendar` (reads your calendar link) and `health` (receives Santé numbers) |
+| `worker/` | The Cloudflare Worker: serves `public/` plus two small online helpers: `calendar` (reads your calendar link) and `health` (receives Santé numbers) |
+| `wrangler.jsonc` | Cloudflare settings (Worker name, which folder is the site) |
 | `supabase/schema.sql` | The database tables (paste once into Supabase) |
 | `docs/SETUP.md` | Step-by-step setup |
 | `native/` | The earlier iPhone/Mac Xcode version, kept for reference, not used |
