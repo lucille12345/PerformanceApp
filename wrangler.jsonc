@@ -4,7 +4,15 @@
   "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS" },
-  // Keep the variables typed in the dashboard when a new version deploys.
+  // Settings that aren't secret live here. The secrets (SUPABASE_SECRET_KEY, HEALTH_KEY,
+  // CALENDAR_URLS) are added in the dashboard: Worker → Settings → Variables and Secrets.
+  "vars": {
+    "SUPABASE_URL": "https://efcwwwmoflkrzgcluqii.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zbtx_FHQxzDOA8iO7Oj1zQ_Jb9XKMNg",
+    "TIMEZONE": "Europe/Paris",
+    "OWNER_USER_ID": ""
+  },
+  // Keep anything added in the dashboard when a new version deploys.
   "keep_vars": true,
   "observability": { "enabled": true }
 }

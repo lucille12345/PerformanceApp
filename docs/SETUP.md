@@ -46,21 +46,20 @@ You can have 2 free projects; #Foodie uses one, so this will be your second.
 2. **Workers & Pages → Create → Import a repository** → connect GitHub → pick `PerformanceApp`.
    Name it `performance-app` (it must match `"name"` in `wrangler.jsonc`), leave the build command
    empty and the deploy command as `npx wrangler deploy` → **Deploy**.
-3. When it's deployed: open the Worker → **Settings → Variables and Secrets → + Add** and add these.
-   Use type **Secret** for the 🔒 ones, **Text** for the others:
+3. The settings that aren't secret (Supabase URL, publishable key, time zone, your user ID) are in
+   `wrangler.jsonc` in this folder. The **secrets** go in the dashboard: open the Worker →
+   **Settings** → the **Variables and Secrets** section (NOT the one inside **Build**, which only exists
+   while the site is being built) → **+ Add** → type **Secret**:
 
    | Name | Value |
    |---|---|
-   | `SUPABASE_URL` | your Project URL |
-   | `SUPABASE_PUBLISHABLE_KEY` | your publishable key |
-   | `SUPABASE_SECRET_KEY` 🔒 | your secret key |
-   | `HEALTH_KEY` 🔒 | the long random key in `health-key.txt` in this folder (never uploaded to GitHub) |
-   | `TIMEZONE` | `Europe/Paris` |
+   | `SUPABASE_SECRET_KEY` | your Supabase secret key |
+   | `HEALTH_KEY` | the long random key in `health-key.txt` in this folder (never uploaded to GitHub) |
    | `CALENDAR_URLS` | added in step 4.3 |
-   | `OWNER_USER_ID` | added in step 4.2 |
 
-   Click **Deploy** after adding them. Changes to variables take effect right away. The app's address
-   is on the Worker's **Overview** page, something like `https://performance-app.YOUR-NAME.workers.dev`.
+   Click **Deploy** / **Save**. To check what the app can see, open `/api/status` on your address:
+   every setting should say `true`.
+   The app's address is on the Worker's **Overview** page, like `https://performance-app.YOUR-NAME.workers.dev`.
 
 ## 4. Your iPhone and Mac
 
@@ -74,7 +73,7 @@ You can have 2 free projects; #Foodie uses one, so this will be your second.
 ### 4.2 Lock it to your account
 
 1. Supabase → **Authentication → Users** → click your account → copy the **User UID**.
-2. Cloudflare → add **`OWNER_USER_ID`** with that value → **Deploy**.
+2. Paste it into `"OWNER_USER_ID"` in `wrangler.jsonc` (or send it to Claude), then commit + push.
 3. Supabase → **Authentication → Sign In / Providers** → turn **off "Allow new users to sign up"**.
 
 Now nobody else can create an account or read your calendar and Santé numbers.
