@@ -30,15 +30,25 @@ export function adminHeaders(env, extra = {}) {
   return h;
 }
 
-/** Checks the Shortcut's key (HEALTH_KEY). Returns an error response, or null when it's fine. */
-export function checkShortcutKey(request, env) {
-  const key = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+/** Reads the Shortcut's JSON and checks its key (HEALTH_KEY), sent either as the header
+    "Authorization: Bearer <key>" or as a "key" field in the JSON.
+    The whole body is always read before answering: if the server replies while the iPhone is still
+    sending, iOS reports "La connexion réseau a été perdue" instead of the real error.
+    Returns { body } when it's fine, or { error: Response }. */
+export async function readShortcut(request, env) {
+  const raw = await request.text();
+  let body = null;
+  try { body = JSON.parse(raw); } catch { /* checked below */ }
+  const header = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const field = String(body?.key ?? '').replace(/^Bearer\s+/i, '').trim();
   const expected = (env.HEALTH_KEY || '').trim();
-  if (!expected) return json({ error: 'HEALTH_KEY is not set in Cloudflare' }, 500);
-  if (!sameSecret(key, expected)) {
-    // Saying how long the stored key is (never what it is) makes a bad paste easy to spot.
-    return json({ error: 'unauthorized', ...(key.length !== expected.length && { storedKeyLength: expected.length }) }, 401);
+  if (!expected) return { error: json({ error: 'HEALTH_KEY is not set in Cloudflare' }, 500) };
+  if (!sameSecret(header, expected) && !sameSecret(field, expected)) {
+    const key = field || header;
+    // Saying how long the received and stored keys are (never what they are) makes a bad paste easy to spot.
+    return { error: json({ error: 'wrong key', receivedLength: key.length, expectedLength: expected.length }, 401) };
   }
-  if (!env.OWNER_USER_ID || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return json({ error: 'not configured' }, 500);
-  return null;
+  if (!env.OWNER_USER_ID || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return { error: json({ error: 'not configured' }, 500) };
+  if (!body || typeof body !== 'object') return { error: json({ error: 'send JSON' }, 400) };
+  return { body };
 }

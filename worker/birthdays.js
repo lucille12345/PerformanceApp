@@ -1,8 +1,8 @@
 /* POST /api/birthdays — called by the iPhone Shortcut with every birthday in Contacts.
-   Header:  Authorization: Bearer <HEALTH_KEY>
+   Key:     header "Authorization: Bearer <HEALTH_KEY>", or a "key" field in the JSON
    Body:    { "list": "Marie Dupont|1998-03-14\nPaul|03-02\n…" }   one person per line, "Name|date"
             Dates can be 1998-03-14, 03-14, 14/03/1998 or 14/03. The list replaces the previous one. */
-import { adminHeaders, checkShortcutKey, json } from './http.js';
+import { adminHeaders, json, readShortcut } from './http.js';
 
 function parseDate(s) {
   const t = String(s).trim();
@@ -14,11 +14,8 @@ function parseDate(s) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const denied = checkShortcutKey(request, env);
-  if (denied) return denied;
-
-  let b;
-  try { b = await request.json(); } catch { return json({ error: 'send JSON' }, 400); }
+  const { body: b, error } = await readShortcut(request, env);
+  if (error) return error;
   const lines = Array.isArray(b.list) ? b.list : String(b.list ?? '').split(/\r?\n/);
 
   const rows = new Map();

@@ -1,10 +1,10 @@
 /* POST /api/health — called every evening by the iPhone Shortcut with today's Santé numbers.
-   Header:  Authorization: Bearer <HEALTH_KEY>
+   Key:     header "Authorization: Bearer <HEALTH_KEY>", or a "key" field in the JSON
    Body:    { "day": "2026-10-21", "steps": 8412, "distance": 6.1, "energy": 412,
               "resting_hr": 58, "sleep": 7.2, "flights": 9 }
    Every field is optional; numbers may arrive as text ("8 412", "6,1"). Sending the same day
    again just replaces it. */
-import { adminHeaders, checkShortcutKey, json } from './http.js';
+import { adminHeaders, json, readShortcut } from './http.js';
 
 const num = (v) => {
   if (v == null || v === '') return null;
@@ -16,11 +16,8 @@ const num = (v) => {
 const hours = (v) => (v == null ? null : v > 1440 ? v / 3600 : v > 24 ? v / 60 : v);
 
 export async function onRequestPost({ request, env }) {
-  const denied = checkShortcutKey(request, env);
-  if (denied) return denied;
-
-  let b;
-  try { b = await request.json(); } catch { return json({ error: 'send JSON' }, 400); }
+  const { body: b, error } = await readShortcut(request, env);
+  if (error) return error;
 
   // No date (or one that isn't YYYY-MM-DD): today, in your time zone. The Shortcut runs in the evening
   // with "est aujourd'hui" filters, so it sends today's numbers.
