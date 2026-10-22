@@ -16,8 +16,13 @@ const num = (v) => {
 const hours = (v) => (v == null ? null : v > 1440 ? v / 3600 : v > 24 ? v / 60 : v);
 
 export async function onRequestPost({ request, env }) {
-  const key = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!sameSecret(key, env.HEALTH_KEY || '')) return json({ error: 'unauthorized' }, 401);
+  const key = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const expected = (env.HEALTH_KEY || '').trim();
+  if (!expected) return json({ error: 'HEALTH_KEY is not set in Cloudflare' }, 500);
+  if (!sameSecret(key, expected)) {
+    // Saying how long the stored key is (never what it is) makes a bad paste easy to spot.
+    return json({ error: 'unauthorized', ...(key.length !== expected.length && { storedKeyLength: expected.length }) }, 401);
+  }
   if (!env.OWNER_USER_ID || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return json({ error: 'not configured' }, 500);
 
   let b;
