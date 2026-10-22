@@ -54,6 +54,35 @@ export const activeSchedule = (d) =>
   d.schedule.filter((i) => !i.deleted).sort((a, b) => a.due - b.due || a.title.localeCompare(b.title));
 export const activeWorkouts = (d) => d.workouts.filter((w) => !w.deleted);
 
+/** Time available for each activity: its end time minus the previous activity's end time,
+    unless a number was typed in (`span`). The first activity has none until one is typed. */
+export function timeToComplete(schedule) {
+  const out = {};
+  schedule.forEach((item, i) => {
+    if (Number.isFinite(item.span)) out[item.id] = { minutes: item.span, auto: false };
+    else if (i > 0) out[item.id] = { minutes: Math.max(0, item.due - schedule[i - 1].due), auto: true };
+    else out[item.id] = { minutes: null, auto: true };
+  });
+  return out;
+}
+
+/** 45 → "45 min", 90 → "1h30", 120 → "2h" */
+export function fmtSpan(min) {
+  if (min == null) return '—';
+  const m = Math.round(min);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? pad(m % 60) : ''}`;
+}
+
+/** Reads what was typed for a time span: "45", "1:30", "1h30", "1h", "90 min" → minutes. */
+export function parseSpan(text) {
+  const t = String(text).trim().toLowerCase().replace(/\s+/g, '');
+  let m;
+  if ((m = t.match(/^(\d+)h(\d{1,2})?(?:min|m)?$/))) return Number(m[1]) * 60 + Number(m[2] || 0);
+  if ((m = t.match(/^(\d+):(\d{1,2})$/))) return Number(m[1]) * 60 + Number(m[2]);
+  if ((m = t.match(/^(\d+)(?:min|m)?$/))) return Number(m[1]);
+  return null;
+}
+
 export const isDone = (rec, id) => rec?.ticks?.[id]?.done === true;
 export const doneCount = (rec) => Object.keys(rec.items).filter((id) => isDone(rec, id)).length;
 export const itemCount = (rec) => Object.keys(rec.items).length;

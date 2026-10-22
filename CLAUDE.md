@@ -18,6 +18,11 @@ Worker name `performance-app` must match the dashboard), data in **Supabase**, `
 - Secrets live only in Cloudflare Worker variables (`keep_vars: true` keeps them across deploys) (`SUPABASE_SECRET_KEY`, `HEALTH_KEY`, `CALENDAR_URLS`,
   `OWNER_USER_ID`). `config.js` holds only the publishable key.
 
+## Time to complete
+Each schedule row shows a chip: end time minus the previous activity's end time (`timeToComplete` in
+`logic.js`); the first activity shows "—". Tapping it sets `item.span` (minutes, overrides the auto value,
+shown in blue); AUTO resets it to null.
+
 ## Calendar box extras
 - `holidays.js`: French fériés/fêtes, Catholic (Easter-based), Jewish (Intl hebrew calendar), US, world — computed on device.
 - Birthdays: Shortcut → `POST /api/birthdays` (HEALTH_KEY) → `perf_birthdays` (replace-all) → app reads via Supabase.

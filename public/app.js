@@ -126,6 +126,7 @@ function renderToday() {
   const fuel = quoteFor(t);
   const rec = data.days[L.dayKey(t)];
   const items = L.activeSchedule(data);
+  const spans = L.timeToComplete(items);
   const done = items.filter((i) => L.isDone(rec, i.id)).length;
   const streak = L.streak(data, now);
   const workouts = L.activeWorkouts(data).filter((w) => L.sameDay(L.appDay(new Date(w.date)), t)).sort((a, b) => b.date - a.date);
@@ -161,8 +162,10 @@ function renderToday() {
     ${bar(items.length ? done / items.length : 0)}
     ${items.map((i) => {
       const on = L.isDone(rec, i.id);
+      const span = spans[i.id];
       return `<div class="task${on ? ' done' : ''}">
         <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span><span class="small">by ${L.fmtTime(i.due)}</span></button>
+        <button class="span${span.auto ? '' : ' set'}" data-act="edit-span" data-id="${i.id}" aria-label="Time to complete ${esc(i.title)}: ${L.fmtSpan(span.minutes)}">${L.fmtSpan(span.minutes)}</button>
         <button class="check" data-act="tick" data-id="${i.id}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"><i>${I.check}</i></button>
       </div>`;
     }).join('')}
@@ -520,6 +523,7 @@ view.addEventListener('click', (e) => {
     });
   } else if (act === 'add-item') openItem({ id: L.uid(), title: '', due: 18 * 60 }, true);
   else if (act === 'edit-item') openItem(data.schedule.find((i) => i.id === el.dataset.id), false);
+  else if (act === 'edit-span') openSpan(data.schedule.find((i) => i.id === el.dataset.id));
   else if (act === 'toggle-log') { ui.logging = !ui.logging; render(); if (ui.logging) $('[name=time]', view)?.focus(); }
   else if (act === 'del-workout') {
     if (!confirm('Delete this workout?')) return;
@@ -622,6 +626,39 @@ function openItem(item, isNew) {
     }
   });
 }
+// ---------- time to complete sheet ----------
+function openSpan(item) {
+  if (!item) return;
+  const auto = L.timeToComplete(L.activeSchedule(data).map((i) => ({ ...i, span: undefined })))[item.id].minutes;
+  const current = Number.isFinite(item.span) ? item.span : auto;
+  sheet.innerHTML = `<form class="panel" data-form="span" autocomplete="off">
+    ${label(`TIME TO COMPLETE · ${item.title.toUpperCase()}`)}
+    <input class="field num-field" name="span" inputmode="numeric" placeholder="${auto != null ? L.fmtSpan(auto) : '1h30'}"
+      aria-label="Time to complete" value="${current != null ? esc(L.fmtSpan(current).replace(' min', '')) : ''}">
+    <div class="err" role="alert"></div>
+    <div class="pair">
+      <button type="button" class="btn quiet" data-sheet="auto"${Number.isFinite(item.span) ? '' : ' disabled'}>${auto != null ? `AUTO · ${esc(L.fmtSpan(auto))}` : 'CLEAR'}</button>
+      <button type="submit" class="btn primary">SAVE</button>
+    </div>
+  </form>`;
+  sheet.hidden = false;
+  const f = sheet.firstElementChild;
+  const input = f.elements.namedItem('span');
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+  const set = (span) => {
+    closeSheet();
+    mutate((d) => { const x = d.schedule.find((i) => i.id === item.id); if (x) { x.span = span; x.modified = Date.now(); } });
+  };
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) return set(null);
+    const m = L.parseSpan(input.value);
+    if (m == null || m > 24 * 60) { f.querySelector('.err').textContent = 'Use 45, 1:30 or 1h30'; return; }
+    set(m);
+  });
+  f.addEventListener('click', (e) => { if (e.target.closest('[data-sheet="auto"]')) set(null); });
+}
+
 function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; }
 sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
