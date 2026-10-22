@@ -50,21 +50,14 @@ export function emptyData() {
   return { schedule: [], days: {}, notes: {}, workouts: [], months: {}, prunedBefore: null };
 }
 
-export const activeSchedule = (d) =>
-  d.schedule.filter((i) => !i.deleted).sort((a, b) => a.due - b.due || a.title.localeCompare(b.title));
-export const activeWorkouts = (d) => d.workouts.filter((w) => !w.deleted);
+/** An activity is either on the schedule (done by a time) or on the to-do list (takes some time). */
+export const isTodo = (i) => i.kind === 'todo';
 
-/** Time available for each activity: its end time minus the previous activity's end time,
-    unless a number was typed in (`span`). The first activity has none until one is typed. */
-export function timeToComplete(schedule) {
-  const out = {};
-  schedule.forEach((item, i) => {
-    if (Number.isFinite(item.span)) out[item.id] = { minutes: item.span, auto: false };
-    else if (i > 0) out[item.id] = { minutes: Math.max(0, item.due - schedule[i - 1].due), auto: true };
-    else out[item.id] = { minutes: null, auto: true };
-  });
-  return out;
-}
+/** Schedule activities by time, then to-do activities by name. */
+export const activeSchedule = (d) =>
+  d.schedule.filter((i) => !i.deleted).sort((a, b) =>
+    isTodo(a) - isTodo(b) || (isTodo(a) ? 0 : a.due - b.due) || a.title.localeCompare(b.title));
+export const activeWorkouts = (d) => d.workouts.filter((w) => !w.deleted);
 
 /** 45 → "45 min", 90 → "1h30", 120 → "2h" */
 export function fmtSpan(min) {

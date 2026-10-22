@@ -15,13 +15,12 @@ Worker name `performance-app` must match the dashboard), data in **Supabase**, `
   order-independent; devices write back only when the merged result differs (`receive` in `app.js`).
 - **Instant open:** `sw.js` serves the cached shell first and refreshes in the background. **Bump `CACHE`**
   in `sw.js` whenever `SHELL` changes.
-- Secrets live only in Cloudflare Worker variables (`keep_vars: true` keeps them across deploys) (`SUPABASE_SECRET_KEY`, `HEALTH_KEY`, `CALENDAR_URLS`,
-  `OWNER_USER_ID`). `config.js` holds only the publishable key.
+- Secrets live only in Cloudflare Worker variables (`keep_vars: true` keeps them across deploys) (`SUPABASE_SECRET_KEY`, `HEALTH_KEY`, `CALENDAR_URLS`); the non-secret ones (Supabase URL + publishable key, `TIMEZONE`,
+  `OWNER_USER_ID`) are `vars` in `wrangler.jsonc`. Saving a secret in the dashboard can create a version without them — then retry the latest build.
 
-## Time to complete
-Each schedule row shows a chip: end time minus the previous activity's end time (`timeToComplete` in
-`logic.js`); the first activity shows "—". Tapping it sets `item.span` (minutes, overrides the auto value,
-shown in blue); AUTO resets it to null.
+## Schedule vs to-do activities
+Each activity has `kind`: `'schedule'` (default; shows "by HH:MM", sorted by `due`) or `'todo'` (shows its
+duration `span` in minutes, no due time; listed after schedule items). Chosen in the add/edit sheet.
 
 ## Calendar box extras
 - `holidays.js`: French fériés/fêtes, Catholic (Easter-based), Jewish (Intl hebrew calendar), US, world — computed on device.

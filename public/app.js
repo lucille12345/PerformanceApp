@@ -126,7 +126,6 @@ function renderToday() {
   const fuel = quoteFor(t);
   const rec = data.days[L.dayKey(t)];
   const items = L.activeSchedule(data);
-  const spans = L.timeToComplete(items);
   const done = items.filter((i) => L.isDone(rec, i.id)).length;
   const streak = L.streak(data, now);
   const workouts = L.activeWorkouts(data).filter((w) => L.sameDay(L.appDay(new Date(w.date)), t)).sort((a, b) => b.date - a.date);
@@ -162,10 +161,9 @@ function renderToday() {
     ${bar(items.length ? done / items.length : 0)}
     ${items.map((i) => {
       const on = L.isDone(rec, i.id);
-      const span = spans[i.id];
+      const sub = L.isTodo(i) ? (Number.isFinite(i.span) ? L.fmtSpan(i.span) : '') : `by ${L.fmtTime(i.due)}`;
       return `<div class="task${on ? ' done' : ''}">
-        <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span><span class="small">by ${L.fmtTime(i.due)}</span></button>
-        <button class="span${span.auto ? '' : ' set'}" data-act="edit-span" data-id="${i.id}" aria-label="Time to complete ${esc(i.title)}: ${L.fmtSpan(span.minutes)}">${L.fmtSpan(span.minutes)}</button>
+        <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span>${sub ? `<span class="small">${sub}</span>` : ''}</button>
         <button class="check" data-act="tick" data-id="${i.id}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"><i>${I.check}</i></button>
       </div>`;
     }).join('')}
@@ -523,7 +521,6 @@ view.addEventListener('click', (e) => {
     });
   } else if (act === 'add-item') openItem({ id: L.uid(), title: '', due: 18 * 60 }, true);
   else if (act === 'edit-item') openItem(data.schedule.find((i) => i.id === el.dataset.id), false);
-  else if (act === 'edit-span') openSpan(data.schedule.find((i) => i.id === el.dataset.id));
   else if (act === 'toggle-log') { ui.logging = !ui.logging; render(); if (ui.logging) $('[name=time]', view)?.focus(); }
   else if (act === 'del-workout') {
     if (!confirm('Delete this workout?')) return;
@@ -591,10 +588,20 @@ view.addEventListener('touchend', (e) => {
 const sheet = $('#sheet');
 function openItem(item, isNew) {
   if (!item) return;
+  let kind = L.isTodo(item) ? 'todo' : 'schedule';
+  const span = Number.isFinite(item.span) ? L.fmtSpan(item.span).replace(' min', '') : '';
   sheet.innerHTML = `<form class="panel" data-form="item" autocomplete="off">
-    ${label(isNew ? 'NEW ACTIVITY' : 'ACTIVITY')}
+    <div class="row-head">
+      ${label(isNew ? 'NEW ACTIVITY' : 'ACTIVITY')}
+      <div class="seg" role="group">
+        <button type="button" data-kind="schedule" aria-pressed="${kind === 'schedule'}">SCHEDULE</button>
+        <button type="button" data-kind="todo" aria-pressed="${kind === 'todo'}">TO DO</button>
+      </div>
+    </div>
     <input class="field" name="title" placeholder="Activity" aria-label="Activity" value="${esc(item.title)}" required>
-    <div class="row-head">${label('COMPLETE BY')}<input class="field" type="time" name="due" aria-label="Complete by" value="${L.fmtTime(item.due)}" required></div>
+    <div class="row-head" data-for="schedule">${label('COMPLETE BY')}<input class="field" type="time" name="due" aria-label="Complete by" value="${L.fmtTime(item.due ?? 18 * 60)}"></div>
+    <div class="row-head" data-for="todo">${label('TIME IT TAKES')}<input class="field num-field" name="span" inputmode="numeric" placeholder="45" aria-label="Time it takes" value="${esc(span)}" style="width:120px"></div>
+    <div class="err" role="alert"></div>
     <div class="pair">
       ${isNew ? '<button type="button" class="btn quiet" data-sheet="close">CANCEL</button>'
         : '<button type="button" class="btn quiet" data-sheet="delete" style="color:var(--red-text)">DELETE</button>'}
@@ -604,20 +611,35 @@ function openItem(item, isNew) {
   sheet.hidden = false;
   const f = sheet.firstElementChild;
   const field = (n) => f.elements.namedItem(n);
+  const showKind = () => {
+    for (const b of f.querySelectorAll('[data-kind]')) b.setAttribute('aria-pressed', b.dataset.kind === kind);
+    for (const el of f.querySelectorAll('[data-for]')) el.hidden = el.dataset.for !== kind;
+  };
+  showKind();
   if (isNew) setTimeout(() => field('title').focus(), 50);
   f.addEventListener('submit', (e) => {
     e.preventDefault();
     const title = field('title').value.trim();
     if (!title) return;
-    const [h, m] = (field('due').value || '18:00').split(':').map(Number);
+    const next = { ...item, title, kind, modified: Date.now(), deleted: false };
+    if (kind === 'schedule') {
+      const [h, m] = (field('due').value || '18:00').split(':').map(Number);
+      next.due = h * 60 + m;
+    } else {
+      const text = field('span').value.trim();
+      const minutes = text ? L.parseSpan(text) : null;
+      if (text && (minutes == null || minutes > 24 * 60)) { f.querySelector('.err').textContent = 'Use 45, 1:30 or 1h30'; return; }
+      next.span = minutes;
+    }
     closeSheet();
     mutate((d) => {
       const i = d.schedule.findIndex((x) => x.id === item.id);
-      const next = { ...item, title, due: h * 60 + m, modified: Date.now(), deleted: false };
       if (i >= 0) d.schedule[i] = next; else d.schedule.push(next);
     });
   });
   f.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-kind]')?.dataset.kind;
+    if (k) { kind = k; showKind(); return; }
     const a = e.target.closest('[data-sheet]')?.dataset.sheet;
     if (a === 'close') closeSheet();
     if (a === 'delete') {
@@ -625,38 +647,6 @@ function openItem(item, isNew) {
       mutate((d) => { const x = d.schedule.find((i) => i.id === item.id); if (x) { x.deleted = true; x.modified = Date.now(); } });
     }
   });
-}
-// ---------- time to complete sheet ----------
-function openSpan(item) {
-  if (!item) return;
-  const auto = L.timeToComplete(L.activeSchedule(data).map((i) => ({ ...i, span: undefined })))[item.id].minutes;
-  const current = Number.isFinite(item.span) ? item.span : auto;
-  sheet.innerHTML = `<form class="panel" data-form="span" autocomplete="off">
-    ${label(`TIME TO COMPLETE · ${item.title.toUpperCase()}`)}
-    <input class="field num-field" name="span" inputmode="numeric" placeholder="${auto != null ? L.fmtSpan(auto) : '1h30'}"
-      aria-label="Time to complete" value="${current != null ? esc(L.fmtSpan(current).replace(' min', '')) : ''}">
-    <div class="err" role="alert"></div>
-    <div class="pair">
-      <button type="button" class="btn quiet" data-sheet="auto"${Number.isFinite(item.span) ? '' : ' disabled'}>${auto != null ? `AUTO · ${esc(L.fmtSpan(auto))}` : 'CLEAR'}</button>
-      <button type="submit" class="btn primary">SAVE</button>
-    </div>
-  </form>`;
-  sheet.hidden = false;
-  const f = sheet.firstElementChild;
-  const input = f.elements.namedItem('span');
-  setTimeout(() => { input.focus(); input.select(); }, 50);
-  const set = (span) => {
-    closeSheet();
-    mutate((d) => { const x = d.schedule.find((i) => i.id === item.id); if (x) { x.span = span; x.modified = Date.now(); } });
-  };
-  f.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!input.value.trim()) return set(null);
-    const m = L.parseSpan(input.value);
-    if (m == null || m > 24 * 60) { f.querySelector('.err').textContent = 'Use 45, 1:30 or 1h30'; return; }
-    set(m);
-  });
-  f.addEventListener('click', (e) => { if (e.target.closest('[data-sheet="auto"]')) set(null); });
 }
 
 function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; }
