@@ -10,7 +10,7 @@
     "SUPABASE_URL": "https://efcwwwmoflkrzgcluqii.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zbtx_FHQxzDOA8iO7Oj1zQ_Jb9XKMNg",
     "TIMEZONE": "Europe/Paris",
-    "OWNER_USER_ID": ""
+    "OWNER_USER_ID": "9071371c-fe04-4203-921d-5a7efa5c5285"
   },
   // Keep anything added in the dashboard when a new version deploys.
   "keep_vars": true,
