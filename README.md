@@ -21,7 +21,8 @@ browser only. Calendar and Santé need the online version.
 | Thing | What it is |
 |---|---|
 | `public/` | **The app itself**: what Cloudflare puts online |
-| `public/logic.js` | The rules: 2am reset, streak, monthly stats, 3-month cleanup, sync merging |
+| `public/logic.js` | The rules: 3am reset, a plan per day, streak, weekly hours, monthly stats, 3-month cleanup, sync merging |
+| `data/birthdays.txt` | Birthdays shown in the calendar: one `Name \| date` per line |
 | `public/config.js` | Supabase address + publishable key (safe to be public) |
 | `worker/` | The Cloudflare Worker: serves `public/` plus two small online helpers: `calendar` (reads your calendar link) and `health` (receives Santé numbers) |
 | `wrangler.jsonc` | Cloudflare settings (Worker name, which folder is the site) |

@@ -121,6 +121,10 @@ Open the **Shortcuts** app → **+** → name it **Send Santé**. Add these acti
 Then make it run by itself: **Automation** tab → **+** → **Time of Day** → pick a time you're
 usually using your phone (e.g. **12:30**), **Daily** → **Run Immediately** → choose **Send Santé**.
 
+> The ↻ button in **Stats → Santé** runs this Shortcut on the iPhone (it must be named exactly
+> **Send Santé**, or change `healthShortcut` in `public/config.js`), then shows the new numbers when you
+> come back to the app.
+
 > iOS can't read Santé while the iPhone is locked. If a day's numbers are missing, just run the
 > Shortcut by hand. A missed day doesn't distort the averages, because the averages only count days
 > that arrived.
@@ -152,6 +156,10 @@ A website can't open Contacts either, so a second Shortcut sends the list of bir
 
 > Names and birthdays are stored in your own Supabase database, readable only by your account.
 > Contacts saved without a birth year show without an age.
+
+**Without the Shortcut:** birthdays can also be typed into `data/birthdays.txt` in this folder, one per
+line (`Marie Dupont | 1998-03-14`, or `Paul | 03-02` without a year). Commit + push and they appear on
+the right day. The app shows both lists together.
 
 ---
 

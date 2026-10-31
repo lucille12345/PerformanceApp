@@ -1,0 +1,2 @@
+# Birthdays shown in the app's calendar (Today page and History).
+# One person per line: Name | date   — dates like 1998-03-14, 03-14, 14/03/1998 or 14/03.

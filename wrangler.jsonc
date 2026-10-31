@@ -4,6 +4,8 @@
   "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
   "assets": { "directory": "./public", "binding": "ASSETS" },
+  // data/birthdays.txt is read by the Worker as plain text.
+  "rules": [{ "type": "Text", "globs": ["**/*.txt"], "fallthrough": true }],
   // Settings that aren't secret live here. The secrets (SUPABASE_SECRET_KEY, HEALTH_KEY,
   // CALENDAR_URLS) are added in the dashboard: Worker → Settings → Variables and Secrets.
   "vars": {

@@ -1,10 +1,12 @@
 /* Performance — Cloudflare Worker.
    Serves the app (the public/ folder) and the two online helpers:
      GET  /api/calendar — today's events from your calendar links
-     POST /api/health   — the nightly Santé numbers from the iPhone Shortcut */
+     POST /api/health   — the nightly Santé numbers from the iPhone Shortcut
+     GET  /api/birthdays — the birthdays list file (data/birthdays.txt)
+     POST /api/birthdays — birthdays from Contacts, sent by the iPhone Shortcut */
 import { onRequestGet as calendar } from './calendar.js';
 import { onRequestPost as health } from './health.js';
-import { onRequestPost as birthdays } from './birthdays.js';
+import { onRequestPost as birthdays, onRequestGet as birthdayList } from './birthdays.js';
 import { json } from './http.js';
 
 export default {
@@ -13,6 +15,7 @@ export default {
     if (pathname === '/api/calendar' && request.method === 'GET') return calendar({ request, env });
     if (pathname === '/api/health' && request.method === 'POST') return health({ request, env });
     if (pathname === '/api/birthdays' && request.method === 'POST') return birthdays({ request, env });
+    if (pathname === '/api/birthdays' && request.method === 'GET') return birthdayList({ request, env });
     // Which settings this version can see (yes/no only, never the values).
     if (pathname === '/api/status') {
       const names = ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'HEALTH_KEY', 'OWNER_USER_ID', 'CALENDAR_URLS', 'TIMEZONE'];

@@ -11,6 +11,8 @@
    • `perf_health` holds the nightly Santé numbers sent by the iPhone Shortcut.
    • /api/calendar (a Cloudflare function) reads today's events from your
      calendar link.
+   • Birthdays come from `perf_birthdays` (iPhone Shortcut) and from the
+     list file the Worker serves at /api/birthdays; both are combined.
    ============================================================================ */
 
 const cfg = window.PERF_CONFIG || {};
@@ -71,8 +73,9 @@ function connect() {
   refresh();
 }
 
-/** Pull the latest data, Santé numbers and today's events (on open and when the app comes back). */
-export async function refresh() {
+/** Pull the latest data, Santé numbers and today's events (on open, when the app comes back,
+    and from the reload buttons — `fresh` makes the calendar skip its 5-minute cache). */
+export async function refresh({ fresh = false } = {}) {
   if (!client || !session) return;
   setStatus('syncing');
   const { data, error } = await client.from('perf_state').select('data').eq('user_id', session.user.id).maybeSingle();
@@ -80,14 +83,20 @@ export async function refresh() {
   latest = data?.data ?? null;
   handlers.onRemote?.(latest);
   setStatus('synced');
-  loadHealth();
-  loadEvents();
-  loadBirthdays();
+  await Promise.all([loadHealth(), loadEvents(fresh), loadBirthdays()]);
 }
 
 async function loadBirthdays() {
-  const { data, error } = await client.from('perf_birthdays').select('name,month,day,year').eq('user_id', session.user.id);
-  if (!error && data) handlers.onBirthdays?.(data);
+  const [table, file] = await Promise.all([
+    client.from('perf_birthdays').select('name,month,day,year').eq('user_id', session.user.id)
+      .then(({ data, error }) => (error ? null : data)).catch(() => null),
+    fetch('/api/birthdays', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      .then((r) => (r.ok ? r.json() : null)).then((b) => b?.birthdays ?? null).catch(() => null),
+  ]);
+  if (!table && !file) return;                        // nothing reachable: keep the last list
+  const all = new Map();
+  for (const b of [...(file ?? []), ...(table ?? [])]) all.set(`${b.name.toLowerCase()}|${b.month}|${b.day}`, b);
+  handlers.onBirthdays?.([...all.values()]);
 }
 
 /** Save to the cloud half a second after the last change. */
@@ -105,17 +114,17 @@ export function push(appData) {
 
 async function loadHealth() {
   const since = new Date(); since.setMonth(since.getMonth() - 13);
-  const { data, error } = await client.from('perf_health').select('day,steps,distance_km,active_kcal,resting_hr,sleep_h,flights')
+  const { data, error } = await client.from('perf_health').select('day,steps,distance_km,active_kcal,resting_hr,sleep_h,flights,updated_at')
     .eq('user_id', session.user.id).gte('day', since.toISOString().slice(0, 10)).order('day');
   if (!error && data) handlers.onHealth?.(data);
 }
 
-async function loadEvents() {
+async function loadEvents(fresh = false) {
   const from = new Date(); from.setHours(0, 0, 0, 0);
   const to = new Date(from); to.setDate(to.getDate() + 1);
   const day = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
   try {
-    const r = await fetch(`/api/calendar?from=${from.getTime()}&to=${to.getTime()}&day=${day}`,
+    const r = await fetch(`/api/calendar?from=${from.getTime()}&to=${to.getTime()}&day=${day}${fresh ? '&fresh=1' : ''}`,
       { headers: { Authorization: `Bearer ${session.access_token}` } });
     if (r.status === 404) return;                     // calendar function not deployed (local testing)
     const body = await r.json();

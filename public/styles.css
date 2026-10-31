@@ -258,3 +258,67 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   .sheet { align-items: center; }
   .sheet .panel { border-radius: 18px; }
 }
+
+/* ---------- added: day plans, hours, boxes, weekly hours, Santé views ---------- */
+.tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.mini { width: 32px; height: 32px; border-radius: 50%; background: var(--card2); color: var(--accent); display: grid; place-items: center; flex: none; }
+.mini .ico { width: 15px; height: 15px; }
+.mini.spin .ico { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cal .row-head { flex-wrap: wrap; row-gap: 4px; }
+.cal .tools { gap: 6px; }
+
+.seg.plan { margin-top: 12px; background: var(--card2); }
+.seg.plan button { flex: 1; height: 34px; }
+.seg.plan button[aria-pressed="true"] { background: var(--line); }
+.check:disabled { cursor: default; opacity: .45; }
+
+.hours { display: flex; flex-direction: column; gap: 10px; }
+.hgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hfield { display: flex; flex-direction: column; gap: 6px; background: var(--card2); border-radius: 10px; padding: 10px 12px; border-top: 3px solid var(--c); }
+.hfield span { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); }
+.hfield input { width: 100%; background: none; border: 0; padding: 0; outline: none; font-family: var(--num); font-size: 26px; font-weight: 700; color: var(--text); }
+.hfield input::placeholder { color: var(--faint); }
+.hfield input.bad { color: var(--red-text); }
+
+.note-head { display: flex; align-items: flex-start; gap: 6px; margin: -6px -8px 0 0; }
+.note-title { flex: 1; min-width: 0; padding: 7px 0 0; outline: none; text-transform: uppercase; overflow-wrap: anywhere;
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #4a5258; cursor: text; min-height: 22px; }
+.note-title:empty::before { content: attr(data-ph); color: #a5adb2; }
+.note-del { width: 32px; height: 32px; display: grid; place-items: center; color: #a5adb2; flex: none; }
+.note-del .ico { width: 14px; height: 14px; }
+.add-box { background: transparent; border: 2px dashed var(--line); color: var(--muted); align-items: center; justify-content: center; }
+.add-box .ico { width: 24px; height: 24px; }
+
+.dc.future.planned { border: 2px dotted var(--accent); color: var(--text); }
+.ditem.sp { gap: 10px; }
+.ditem.sp .ico { width: 18px; height: 18px; stroke-width: 2; flex: none; }
+.ditem.sp span { color: var(--text); }
+.tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tiles.two .num { font-size: 34px; }
+
+.gbars { display: flex; align-items: flex-end; gap: 6px; height: 130px; border-bottom: 1px solid var(--line); margin-top: 12px; }
+.gbars > div { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; border-radius: 4px; }
+.gbars > div.now { background: rgba(255, 255, 255, .04); }
+.gbars i { flex: 1; max-width: 9px; border-radius: 2px 2px 0 0; min-height: 0; }
+.htable { margin-top: 12px; }
+.hrow, .srow { display: grid; grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr)); align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.hrow .d, .srow .d { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--muted); }
+.hrow .num, .srow .num { font-size: 17px; text-align: right; }
+.hrow.th, .srow.th { border-top: 0; padding: 0 0 4px; }
+.hrow.th span, .srow.th span { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-align: right; color: var(--muted); }
+.hrow.later .num { opacity: .5; }
+.hrow.total, .srow.total { border-top: 2px solid var(--faint); }
+.hrow.total .d, .srow.total .d { color: var(--text); }
+.hrow.total .num { font-size: 20px; }
+
+.health .mini { background: var(--health-card); color: var(--health-soft); }
+.seg.hseg { background: var(--health-card); }
+.seg.hseg button { flex: 1; height: 34px; color: var(--health-muted); }
+.seg.hseg button[aria-pressed="true"] { background: var(--health-line); color: var(--text); }
+.srow { grid-template-columns: 54px repeat(5, minmax(0, 1fr)); gap: 4px; border-color: var(--health-line); }
+.hrow .d, .srow .d { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .d { color: var(--health-muted); }
+.srow .num { font-size: 15px; }
+.srow.th span { color: var(--health-muted); font-size: 9px; }
+.health .vbars small { color: var(--health-muted); }

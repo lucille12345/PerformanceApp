@@ -1,7 +1,7 @@
-/* GET /api/calendar?from=<ms>&to=<ms>&day=YYYY-MM-DD
+/* GET /api/calendar?from=<ms>&to=<ms>&day=YYYY-MM-DD[&fresh=1]
    Today's events from the calendar links in the CALENDAR_URLS setting
    (iCloud "Public Calendar" or Google "Secret address in iCal format").
-   Only the owner's signed-in account can call it. */
+   Only the owner's signed-in account can call it. fresh=1 (the reload button) skips the 5-minute cache. */
 import ICAL from 'ical.js';
 import { json, owner } from './http.js';
 
@@ -12,14 +12,15 @@ export async function onRequestGet({ request, env }) {
   if (!from || !to || to <= from || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'bad request' }, 400);
 
   const urls = (env.CALENDAR_URLS || '').split(/[\s,]+/).filter(Boolean).map((u) => u.replace(/^webcals?:\/\//i, 'https://'));
-  const lists = await Promise.all(urls.map((u) => eventsFrom(u, from, to, day).catch(() => [])));
+  const fresh = q.get('fresh') === '1';
+  const lists = await Promise.all(urls.map((u) => eventsFrom(u, from, to, day, fresh).catch(() => [])));
   const events = lists.flat().sort((a, b) => (b.allDay - a.allDay) || a.start - b.start);
   return json({ events });
 }
 
-async function eventsFrom(url, from, to, day) {
+async function eventsFrom(url, from, to, day, fresh = false) {
   // Cloudflare keeps the downloaded calendar for 5 minutes, so opening the app stays fast.
-  const r = await fetch(url, { cf: { cacheTtl: 300, cacheEverything: true } });
+  const r = await fetch(url, fresh ? { cache: 'no-store' } : { cf: { cacheTtl: 300, cacheEverything: true } });
   if (!r.ok) throw new Error(`calendar ${r.status}`);
   const cal = new ICAL.Component(ICAL.parse(await r.text()));
   for (const tz of cal.getAllSubcomponents('vtimezone')) ICAL.TimezoneService.register(tz);

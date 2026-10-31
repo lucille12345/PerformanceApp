@@ -3,7 +3,8 @@
    ----------------------------------------------------------------------------
    Opens instantly from what's saved on this device (localStorage), then syncs
    with Supabase in the background when signed in (cloud.js). Data rules —
-   2am reset, monthly summaries, 3-month cleanup — live in logic.js.
+   3am reset, day-by-day plans, streaks, weekly hours, monthly summaries,
+   3-month cleanup — live in logic.js.
    ============================================================================ */
 import * as L from './logic.js';
 import { quoteFor } from './quotes.js';
@@ -21,14 +22,22 @@ function keep(key, value) {
 let data = L.housekeep(load('perf-data', L.emptyData()));
 let health = load('perf-health', []);            // nightly rows sent by the Santé Shortcut
 let events = load('perf-events', { day: null, list: [], denied: false });
-let birthdays = load('perf-birthdays', []);      // from Contacts, sent by the iPhone Shortcut
+let birthdays = load('perf-birthdays', []);      // from Contacts (Shortcut + the birthdays list file)
 let now = new Date();
 
 const ui = {
   tab: load('perf-tab', 'today'),
   hist: 'week', week: 0, month: 0, sel: null, year: 0,
   logging: false, form: { time: '', pace: '', sport: '', kcal: '' },
+  plan: 'today',                                 // schedule card shows 'today' or 'tomorrow'
+  pastWeeks: false,                              // Stats: totals of the previous weeks shown
+  health: load('perf-health-view', 'day'),       // Santé: 'day' | 'week' | 'month'
+  reloading: false,
 };
+
+const cfg = window.PERF_CONFIG || {};
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let healthRunAt = 0;                             // when the Santé Shortcut was last started from the app
 
 const $ = (s, el = document) => el.querySelector(s);
 const view = $('#view');
@@ -65,6 +74,7 @@ const I = {
   plus: '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
+  reload: '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
   cake: '<path d="M4 21h16M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M5 16c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 5 0M12 12V8M12 5.5c-.8-.8-.8-2 0-3 .8 1 .8 2.2 0 3z"/>',
   star: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
   heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.5-9.3C1 8.2 3.2 4.5 6.8 4.5c2.1 0 3.6 1.1 5.2 3 1.6-1.9 3.1-3 5.2-3 3.6 0 5.8 3.7 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>',
@@ -124,8 +134,10 @@ function workoutRow(w, deletable) {
 function renderToday() {
   const t = today();
   const fuel = quoteFor(t);
-  const rec = data.days[L.dayKey(t)];
-  const items = L.activeSchedule(data);
+  const tomorrow = ui.plan === 'tomorrow';
+  const planKey = L.dayKey(tomorrow ? L.addDays(t, 1) : t);
+  const rec = data.days[planKey];
+  const items = L.itemsOn(data, planKey);
   const done = items.filter((i) => L.isDone(rec, i.id)).length;
   const streak = L.streak(data, now);
   const workouts = L.activeWorkouts(data).filter((w) => L.sameDay(L.appDay(new Date(w.date)), t)).sort((a, b) => b.date - a.date);
@@ -155,23 +167,29 @@ function renderToday() {
       ${label('SCHEDULE')}
       <div style="display:flex;align-items:center;gap:10px">
         <span class="count">${done}<span class="dim">/${items.length}</span></span>
-        <button class="add" data-act="add-item" aria-label="Add activity">${I.plus}</button>
+        <button class="add" data-act="add-item" data-day="${planKey}" aria-label="Add activity">${I.plus}</button>
       </div>
     </div>
+    <div class="seg plan" role="group" aria-label="Day">
+      <button data-act="plan" data-plan="today" aria-pressed="${!tomorrow}">TODAY</button>
+      <button data-act="plan" data-plan="tomorrow" aria-pressed="${tomorrow}">TOMORROW</button>
+    </div>
     ${bar(items.length ? done / items.length : 0)}
-    ${items.map((i) => {
-      const on = L.isDone(rec, i.id);
-      const sub = L.isTodo(i) ? (Number.isFinite(i.span) ? L.fmtSpan(i.span) : '') : `by ${L.fmtTime(i.due)}`;
-      return `<div class="task${on ? ' done' : ''}">
-        <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span>${sub ? `<span class="small">${sub}</span>` : ''}</button>
-        <button class="check" data-act="tick" data-id="${i.id}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"><i>${I.check}</i></button>
-      </div>`;
-    }).join('')}
+    ${items.map((i) => taskRow(i, rec, !tomorrow)).join('')}
   </section>
 
+  ${renderHoursCard(L.dayKey(t), 'HOURS')}
+
   <div class="notes">
-    ${[['todo', 'TO DO'], ['projects', 'PROJECTS'], ['goals', 'LONG-TERM GOALS'], ['other', 'OTHER']].map(([k, l]) => `
-      <label class="note"><span>${l}</span><textarea data-note="${k}" spellcheck="true">${esc(data.notes[k]?.text ?? '')}</textarea></label>`).join('')}
+    ${L.activeBoxes(data).map((b) => `
+      <div class="note">
+        <div class="note-head">
+          <div class="note-title" data-box-title="${b.id}" contenteditable="plaintext-only" role="textbox" aria-label="Box title" data-ph="TITLE" spellcheck="false">${esc(b.title)}</div>
+          <button class="note-del" data-act="del-box" data-id="${b.id}" aria-label="Delete ${esc(b.title || 'box')}">${I.x}</button>
+        </div>
+        <textarea data-note="${b.id}" spellcheck="true" aria-label="${esc(b.title || 'Notes')}">${esc(data.notes[b.id]?.text ?? '')}</textarea>
+      </div>`).join('')}
+    <button class="note add-box" data-act="add-box" aria-label="Add box">${I.plus}</button>
   </div>
 
   <section class="card train">
@@ -186,6 +204,28 @@ function renderToday() {
       <button class="btn primary" type="submit"${canSaveWorkout() ? '' : ' disabled'}>SAVE</button>
     </form>` : ''}
     <button class="btn ghost" data-act="toggle-log">${ui.logging ? `${I.x} CANCEL` : `${I.plus} LOG WORKOUT`}</button>
+  </section>`;
+}
+
+/** One activity: tap the name to edit it, tap the box to tick it (only on its own day). */
+function taskRow(i, rec, tickable = true) {
+  const on = L.isDone(rec, i.id);
+  const sub = L.isTodo(i) ? (Number.isFinite(i.span) ? L.fmtSpan(i.span) : '') : `by ${L.fmtTime(i.due)}`;
+  return `<div class="task${on ? ' done' : ''}">
+    <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span>${sub ? `<span class="small">${sub}</span>` : ''}</button>
+    <button class="check" data-act="tick" data-id="${i.id}" data-day="${i.day}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"${tickable ? '' : ' disabled'}><i>${I.check}</i></button>
+  </div>`;
+}
+
+// Hours typed by hand each day: work, sport, time on the phone.
+const LOG = [['work', 'WORK', 'var(--accent)'], ['sport', 'SPORT', 'var(--green)'], ['phone', 'PHONE', 'var(--red-text)']];
+function renderHoursCard(key, title) {
+  const v = L.logOf(data, key);
+  return `<section class="card hours">
+    <div class="row-head">${label(title)}</div>
+    <div class="hgrid">${LOG.map(([f, l, c]) => `<label class="hfield" style="--c:${c}"><span>${l}</span>
+      <input data-log="${f}" data-day="${key}" inputmode="decimal" autocomplete="off" placeholder="0h" value="${v[f] != null ? L.fmtH(v[f]) : ''}" aria-label="${l.toLowerCase()} hours"></label>`).join('')}
+    </div>
   </section>`;
 }
 
@@ -221,7 +261,12 @@ function renderCalendar() {
   } else if (!special.length) body += row('var(--faint)', '', Cloud.state().enabled ? 'Nothing today' : 'Not connected', null);
   const n = list.length + special.length;
   return `<section class="card cal">
-    <div class="row-head">${label('CALENDAR')}${n ? `<span class="small">${n} today</span>` : ''}</div>
+    <div class="row-head">${label('CALENDAR')}
+      <div class="tools">${n ? `<span class="small">${n} today</span>` : ''}
+        <button class="mini${ui.reloading ? ' spin' : ''}" data-act="reload" aria-label="Reload calendar">${I.reload}</button>
+        <button class="mini" data-act="add-item" data-day="${L.dayKey(today())}" data-from="calendar" aria-label="Add to a day">${I.plus}</button>
+      </div>
+    </div>
     ${body}
   </section>`;
 }
@@ -247,7 +292,8 @@ const record = (day) => data.days[L.dayKey(day)];
 const dayCircle = (day, size = '') => {
   const st = L.status(data, day, now);
   const sel = ui.sel && L.sameDay(ui.sel, day) ? ' sel' : '';
-  return `<span class="dc ${st}${sel}"${size}>${day.getDate()}</span>`;
+  const planned = st === 'future' && L.itemsOn(data, L.dayKey(day)).length ? ' planned' : '';
+  return `<span class="dc ${st}${sel}${planned}"${size}>${day.getDate()}</span>`;
 };
 
 function renderWeek() {
@@ -266,7 +312,7 @@ function renderWeek() {
     </div>
   </section>
   ${ui.sel ? renderDay(ui.sel) : `
-    ${renderTotals('THIS WEEK', L.counts(days.map(record).filter(Boolean)))}
+    ${renderTotals('THIS WEEK', L.counts(days.filter((d) => d <= today()).map(record).filter(Boolean)))}
     ${workouts.length ? `<section class="card">${label('TRAINING')}
       <div class="tiles" style="margin-top:10px">
         <div class="tile"><div class="num">${L.fmtHours(workouts.reduce((s, w) => s + w.minutes, 0))}</div><small>HOURS</small></div>
@@ -290,13 +336,27 @@ function renderDay(day) {
   const isToday = L.sameDay(day, today());
   const workouts = L.activeWorkouts(data).filter((w) => L.sameDay(L.appDay(new Date(w.date)), day));
   const n = r ? L.itemCount(r) : 0, d = r ? L.doneCount(r) : 0;
-  const color = n && d === n ? 'var(--green)' : (!isToday ? 'var(--red-text)' : 'var(--text)');
+  const ahead = day >= today();                 // today and later: the plan can still change
+  const future = day > today();
+  const color = n && d === n ? 'var(--green)' : (future ? 'var(--muted)' : !isToday ? 'var(--red-text)' : 'var(--text)');
+  const key = L.dayKey(day);
+  const special = [
+    ...birthdaysOn(day).map((b) => `<div class="ditem sp"><svg viewBox="0 0 24 24" class="ico" style="color:#FF6F8A" role="img" aria-label="Birthday">${I.cake}</svg><span>${esc(b.age != null ? `${b.name} · ${b.age}` : b.name)}</span></div>`),
+    ...holidaysOn(day).map((h) => `<div class="ditem sp"><svg viewBox="0 0 24 24" class="ico" style="color:${KINDS[h.kind].color}" role="img" aria-label="${KINDS[h.kind].label}">${I.star}</svg><span>${esc(h.name)}</span></div>`),
+  ].join('');
+  const plannedList = ahead ? L.itemsOn(data, key) : [];
+  const inThisWeek = L.weekKey(day) === L.weekKey(today()) && !future;
   return `<section class="card">
-    <div class="row-head" style="padding-bottom:8px">${label(`${DOW[day.getDay()].slice(0, 3)} ${dShort(day)}`)}${n ? `<span class="num" style="font-size:18px;color:${color}">${d}/${n}</span>` : ''}</div>
-    ${n ? Object.entries(r.items).sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) =>
-      `<div class="ditem${L.isDone(r, id) ? ' on' : ''}"><i>${I.check}</i><span>${esc(title)}</span></div>`).join('') : '<div class="empty">No data</div>'}
+    <div class="row-head" style="padding-bottom:8px">${label(`${DOW[day.getDay()].slice(0, 3)} ${dShort(day)}`)}
+      <div class="tools">${n ? `<span class="num" style="font-size:18px;color:${color}">${d}/${n}</span>` : ''}
+        ${ahead ? `<button class="add" data-act="add-item" data-day="${key}" aria-label="Add activity">${I.plus}</button>` : ''}</div></div>
+    ${special}
+    ${ahead ? plannedList.map((i) => taskRow(i, r, isToday)).join('') || (special ? '' : '<div class="empty">No data</div>')
+      : n ? Object.entries(r.items).sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) =>
+      `<div class="ditem${L.isDone(r, id) ? ' on' : ''}"><i>${I.check}</i><span>${esc(title)}</span></div>`).join('') : (special ? '' : '<div class="empty">No data</div>')}
     ${workouts.length ? `<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">${workouts.map((w) => workoutRow(w, false)).join('')}</div>` : ''}
-  </section>`;
+  </section>
+  ${inThisWeek ? renderHoursCard(key, `HOURS · ${DOW[day.getDay()].slice(0, 3)} ${dShort(day)}`) : ''}`;
 }
 
 function renderMonth() {
@@ -310,7 +370,7 @@ function renderMonth() {
   const red = live ? statuses.filter((s) => s === 'missed').length : (summary?.missedDays ?? 0);
 
   // Activity totals: live while daily detail exists, from the frozen summary afterwards.
-  const records = days.map(record).filter(Boolean);
+  const records = days.filter((d) => d <= today()).map(record).filter(Boolean);
   let counts = records.length ? L.counts(records)
     : Object.entries(summary?.activity ?? {}).map(([title, done]) => ({ title, done }));
   counts = counts.sort((a, b) => b.done - a.done || a.title.localeCompare(b.title));
@@ -382,6 +442,8 @@ function renderStats() {
     <div class="axis"><span>0%</span><span>50%</span><span>100%</span></div>
   </section>
 
+  ${ui.year === 0 ? renderStreaks() + renderHoursWeek() : ''}
+
   ${last && ui.year === 0 && last.sports.length ? renderSportMonth(last) : ''}
 
   ${vbars('SPORT HOURS / MONTH', months, 'var(--accent)', (k) => data.months[k] && data.months[k].sports.reduce((s, x) => s + x.minutes, 0) / 60, delta, (v) => L.fmtHours(v * 60))}
@@ -389,6 +451,61 @@ function renderStats() {
     last ? [L.fmtHours(last.cardioMinutes), 'var(--orange)'] : null, (v) => L.fmtHours(v * 60))}
 
   ${renderHealth(months)}`;
+}
+
+function renderStreaks() {
+  return `<section class="card">
+    ${label('DAY STREAK')}
+    <div class="tiles two" style="margin-top:10px">
+      <div class="tile"><div class="num">${L.streak(data, now)}</div><small>CURRENT</small></div>
+      <div class="tile"><div class="num" style="color:#ffb066">${L.bestStreak(data, now)}</div><small>LONGEST</small></div>
+    </div>
+  </section>`;
+}
+
+/** Grouped bars: for each column, one bar per field (work / sport / phone). */
+function gbars(cols, labels, highlight = -1) {
+  const max = Math.max(60, ...cols.flatMap((v) => LOG.map(([f]) => v[f] ?? 0)));
+  return `<div class="gbars">
+      ${cols.map((v, i) => `<div${i === highlight ? ' class="now"' : ''}>${LOG.map(([f, l, c]) =>
+        `<i style="height:${Math.round((v[f] ?? 0) / max * 100)}%;background:${c}" title="${l} ${L.fmtH(v[f] ?? 0)}"></i>`).join('')}</div>`).join('')}
+    </div>
+    <div class="vlabels">${labels.map((t) => `<span>${esc(t)}</span>`).join('')}</div>`;
+}
+const hrow = (name, v, cls = '') => `<div class="hrow${cls}"><span class="d">${esc(name)}</span>${LOG.map(([f, , c]) =>
+  `<span class="num" style="color:${v[f] ? c : 'var(--faint)'}">${v[f] != null ? L.fmtH(v[f]) : '—'}</span>`).join('')}</div>`;
+
+const hhead = () => `<div class="hrow th"><span class="d"></span>${LOG.map(([, l, c]) => `<span style="color:${c}">${l}</span>`).join('')}</div>`;
+
+/** Hours typed this week: every day, then the total underneath. Earlier weeks: totals only. */
+function renderHoursWeek() {
+  const start = L.startOfWeek(today());
+  const wKey = L.dayKey(start);
+  const days = Array.from({ length: 7 }, (_, i) => L.addDays(start, i));
+  const vals = days.map((d) => L.logOf(data, L.dayKey(d)));
+  const tot = L.weekTotals(data, wKey) ?? { work: 0, sport: 0, phone: 0 };
+  const todayIdx = days.findIndex((d) => L.sameDay(d, today()));
+  const past = Object.values(data.weeks ?? {}).filter((w) => w.key < wKey).sort((a, b) => (a.key < b.key ? 1 : -1));
+  const weekName = (k) => { const s = L.parseDay(k), e = L.addDays(s, 6); return `${s.getMonth() === e.getMonth() ? s.getDate() : dShort(s)} – ${dShort(e)}`; };
+  const chartWeeks = past.slice(0, 8).reverse();
+  return `<section class="card">
+    <div class="row-head">${label('HOURS · THIS WEEK')}
+      <button class="link" data-act="past-weeks" aria-expanded="${ui.pastWeeks}">${ui.pastWeeks ? 'HIDE' : 'PAST WEEKS'}</button></div>
+    ${gbars(vals, days.map((d) => DOW[d.getDay()][0]), todayIdx)}
+    <div class="htable">
+      ${hhead()}
+      ${days.map((d, i) => hrow(`${DOW[d.getDay()].slice(0, 3)} ${d.getDate()}`, vals[i], d > today() ? ' later' : '')).join('')}
+      ${hrow('TOTAL', tot, ' total')}
+    </div>
+  </section>
+  ${ui.pastWeeks ? `<section class="card">
+    <div class="row-head">${label('PAST WEEKS')}<span class="small">totals</span></div>
+    ${past.length ? `${chartWeeks.length > 1 ? gbars(chartWeeks, chartWeeks.map((w) => { const s = L.parseDay(w.key); return `${s.getDate()}/${s.getMonth() + 1}`; })) : ''}
+    <div class="htable">
+      ${hhead()}
+      ${past.map((w) => hrow(weekName(w.key), w)).join('')}
+    </div>` : '<div class="empty">No data</div>'}
+  </section>` : ''}`;
 }
 
 function renderSportMonth(s) {
@@ -428,7 +545,8 @@ function spark(values) {
   return `<svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="#FF6F8A" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
 }
 
-function renderHealth(months) {
+/** Santé · MONTH: daily averages per month (the original view). */
+function renderHealthMonth(months) {
   const hm = L.healthMonths(health);
   const lastKey = L.monthKey(L.addMonths(L.startOfMonth(today()), -1));
   const shownKey = hm[lastKey] ? lastKey : L.monthKey(today());
@@ -442,10 +560,8 @@ function renderHealth(months) {
   const maxSteps = Math.max(...steps);
   const latest = steps.reduce((li, v, i) => (v > 0 ? i : li), -1);
 
-  return `<section class="health" aria-label="Data from Santé">
-    <div class="head"><span class="heart">${I.heart}</span>
-      <div><b>SANTÉ</b>${m ? `<small>Daily activity · ${MONTH[L.parseMonth(shownKey).getMonth()].charAt(0) + MONTH[L.parseMonth(shownKey).getMonth()].slice(1).toLowerCase()}</small>` : ''}</div></div>
-    ${m ? `
+  const sub = m ? `Daily activity · ${MONTH[L.parseMonth(shownKey).getMonth()].charAt(0) + MONTH[L.parseMonth(shownKey).getMonth()].slice(1).toLowerCase()}` : '';
+  return [sub, m ? `
     <div class="htiles">
       ${tile('STEPS', n(m.steps, L.fmtThousands), '/day', 'steps')}
       ${tile('DISTANCE', n(m.distance_km, (v) => v.toFixed(1)), 'km/day', 'distance_km')}
@@ -458,7 +574,73 @@ function renderHealth(months) {
       <div class="row-head">${label('STEPS / DAY · MONTHLY AVG')}${m.steps != null ? `<span class="num" style="font-size:16px">${L.fmtThousands(m.steps)}</span>` : ''}</div>
       <div class="vbars">${steps.map((v, i) => `<div><i style="height:${maxSteps ? Math.round(v / maxSteps * 90) : 0}%;background:var(--health-soft);opacity:${i === latest ? 1 : .6}"></i></div>`).join('')}</div>
       <div class="vlabels">${months.map((mo) => `<span>${MON[mo.getMonth()][0]}</span>`).join('')}</div>
-    </div>` : '<div class="empty">No data from Santé yet</div>'}
+    </div>` : '<div class="empty">No data from Santé yet</div>'];
+}
+
+const hTile = (l, v, u, values = []) => `<div class="htile"><span class="l">${l}</span><div><span class="num">${v}</span><span class="u">${u}</span></div>${spark(values)}</div>`;
+const hN = (v, f) => (v == null ? '—' : f(v));
+const hFmt = {
+  steps: (v) => L.fmtThousands(v), distance_km: (v) => v.toFixed(1), active_kcal: (v) => L.fmtThousands(v),
+  resting_hr: (v) => String(Math.round(v)), sleep_h: (v) => L.fmtHours(v * 60), flights: (v) => String(Math.round(v)),
+};
+/** The last 7 calendar days (ending today) with the Santé row of each, when one arrived. */
+function healthWeek() {
+  const end = new Date(); end.setHours(0, 0, 0, 0);
+  const by = Object.fromEntries(health.map((r) => [r.day, r]));
+  return Array.from({ length: 7 }, (_, i) => { const d = L.addDays(end, i - 6); return { d, r: by[L.dayKey(d)] ?? null }; });
+}
+
+/** Santé · DAY: the latest day received (normally today). */
+function renderHealthDay() {
+  const latest = [...health].sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+  if (!latest) return ['', '<div class="empty">No data from Santé yet</div>'];
+  const d = L.parseDay(latest.day);
+  const isToday = latest.day === L.dayKey(new Date());
+  const upd = latest.updated_at ? new Date(latest.updated_at) : null;
+  const sub = `${isToday ? 'Today' : `${DOW[d.getDay()].charAt(0) + DOW[d.getDay()].slice(1, 3).toLowerCase()} ${dShort(d)}`}${upd ? ` · ${hhmm(upd)}` : ''}`;
+  const week = healthWeek().map((x) => x.r);
+  const tr = (f) => week.map((r) => r?.[f]).filter((v) => v != null && !(f === 'sleep_h' && v === 0));
+  return [sub, `<div class="htiles">
+      ${hTile('STEPS', hN(latest.steps, hFmt.steps), '', tr('steps'))}
+      ${hTile('DISTANCE', hN(latest.distance_km, hFmt.distance_km), 'km', tr('distance_km'))}
+      ${hTile('ACTIVE ENERGY', hN(latest.active_kcal, hFmt.active_kcal), 'kcal', tr('active_kcal'))}
+      ${hTile('RESTING HR', hN(latest.resting_hr, hFmt.resting_hr), 'bpm', tr('resting_hr'))}
+      ${hTile('SLEEP', hN(latest.sleep_h || null, hFmt.sleep_h), 'h', tr('sleep_h'))}
+      ${hTile('FLIGHTS', hN(latest.flights, hFmt.flights), '', tr('flights'))}
+    </div>`];
+}
+
+/** Santé · 7 DAYS: every day of the last week, with the average underneath. */
+function renderHealthWeek() {
+  const week = healthWeek();
+  if (!week.some((x) => x.r)) return ['Last 7 days', '<div class="empty">No data from Santé yet</div>'];
+  const cols = [['steps', 'STEPS'], ['distance_km', 'KM'], ['active_kcal', 'KCAL'], ['sleep_h', 'SLEEP'], ['resting_hr', 'BPM']];
+  const avg = (f) => { const v = week.map((x) => x.r?.[f]).filter((n) => n != null && !(f === 'sleep_h' && n === 0)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const steps = week.map((x) => x.r?.steps || 0);
+  const max = Math.max(1, ...steps);
+  const row = (name, get, cls = '') => `<div class="srow${cls}"><span class="d">${name}</span>${cols.map(([f]) => `<span class="num">${hN(get(f), hFmt[f])}</span>`).join('')}</div>`;
+  return ['Last 7 days', `<div class="card">
+      <div class="row-head">${label('STEPS / DAY')}${avg('steps') != null ? `<span class="num" style="font-size:16px">${L.fmtThousands(avg('steps'))}<span class="small"> avg</span></span>` : ''}</div>
+      <div class="vbars">${steps.map((v, i) => `<div>${v ? `<small>${v >= 1000 ? `${Math.round(v / 100) / 10}k` : v}</small>` : ''}<i style="height:${Math.round(v / max * 80)}%;background:var(--health-soft);opacity:${i === 6 ? 1 : .6}"></i></div>`).join('')}</div>
+      <div class="vlabels">${week.map((x) => `<span>${DOW[x.d.getDay()][0]}</span>`).join('')}</div>
+    </div>
+    <div class="card stable">
+      <div class="srow th"><span class="d"></span>${cols.map(([, l]) => `<span>${l}</span>`).join('')}</div>
+      ${week.slice().reverse().map((x) => row(`${DOW[x.d.getDay()].slice(0, 3)} ${x.d.getDate()}`, (f) => (f === 'sleep_h' && x.r?.[f] === 0 ? null : x.r?.[f]))).join('')}
+      ${row('AVG', avg, ' total')}
+    </div>`];
+}
+
+function renderHealth(months) {
+  const [sub, body] = ui.health === 'month' ? renderHealthMonth(months) : ui.health === 'week' ? renderHealthWeek() : renderHealthDay();
+  return `<section class="health" aria-label="Data from Santé">
+    <div class="head"><span class="heart">${I.heart}</span>
+      <div style="flex:1;min-width:0"><b>SANTÉ</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>
+      <button class="mini${ui.reloading ? ' spin' : ''}" data-act="health-reload" aria-label="Update Santé">${I.reload}</button></div>
+    <div class="seg hseg" role="group" aria-label="Santé period">
+      ${[['day', 'DAY'], ['week', '7 DAYS'], ['month', 'MONTH']].map(([k, l]) => `<button data-act="health-view" data-view="${k}" aria-pressed="${ui.health === k}">${l}</button>`).join('')}
+    </div>
+    ${body}
   </section>`;
 }
 
@@ -487,7 +669,7 @@ let pending = false;
 function render() {
   // Never redraw under the cursor while typing in a note or the workout form.
   const a = document.activeElement;
-  if (a && view.contains(a) && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT')) { pending = true; return; }
+  if (a && view.contains(a) && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT' || a.isContentEditable)) { pending = true; return; }
   pending = false;
   const s = Cloud.state();
   const needSignIn = s.enabled && !s.session && !s.hadSession;
@@ -496,7 +678,10 @@ function render() {
   for (const b of document.querySelectorAll('.tabbar button')) b.setAttribute('aria-current', b.dataset.tab === ui.tab ? 'page' : 'false');
   view.innerHTML = ui.tab === 'history' ? renderHistory() : ui.tab === 'stats' ? renderStats() : renderToday();
 }
-view.addEventListener('focusout', () => setTimeout(() => { if (pending) render(); }, 0));
+view.addEventListener('focusout', (e) => {
+  if (e.target.dataset?.log && !e.target.classList.contains('bad')) pending = true;   // show "2.5" as "2h30"
+  setTimeout(() => { if (pending) render(); }, 350);
+});
 
 // ============================================================================
 // interactions
@@ -514,12 +699,35 @@ view.addEventListener('click', (e) => {
   const act = el.dataset.act;
   if (act === 'tick') {
     const key = L.dayKey(today());
+    if (el.disabled || (el.dataset.day && el.dataset.day !== key)) return;   // only today's activities can be ticked
     mutate((d) => {
       const rec = d.days[key] ?? { key, items: {}, ticks: {} };
       rec.ticks[el.dataset.id] = { done: !L.isDone(rec, el.dataset.id), modified: Date.now() };
       d.days[key] = rec;
     });
-  } else if (act === 'add-item') openItem({ id: L.uid(), title: '', due: 18 * 60 }, true);
+  } else if (act === 'add-item') {
+    const fromCal = el.dataset.from === 'calendar';
+    const kind = fromCal ? 'schedule' : load('perf-kind', 'schedule');
+    openItem({ id: L.uid(), title: '', due: 18 * 60, kind, day: el.dataset.day || L.dayKey(today()) }, true, { remember: !fromCal });
+  } else if (act === 'plan') { ui.plan = el.dataset.plan; render(); }
+  else if (act === 'reload') reloadAll();
+  else if (act === 'health-reload') {
+    // iPhone: run the Santé Shortcut so today's numbers are sent now; the app reloads when you come back.
+    if (isIOS() && cfg.healthShortcut) { healthRunAt = Date.now(); location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(cfg.healthShortcut)}`; }
+    reloadAll();
+  } else if (act === 'health-view') { ui.health = el.dataset.view; keep('perf-health-view', ui.health); render(); }
+  else if (act === 'past-weeks') { ui.pastWeeks = !ui.pastWeeks; render(); }
+  else if (act === 'add-box') {
+    const id = L.uid();
+    mutate((d) => { d.boxes.push({ id, title: '', order: Math.max(-1, ...d.boxes.map((b) => b.order)) + 1, modified: Date.now(), deleted: false }); });
+    $(`[data-box-title="${id}"]`, view)?.focus();
+  } else if (act === 'del-box') {
+    const b = data.boxes.find((x) => x.id === el.dataset.id);
+    if (!b) return;
+    const hasText = (data.notes[b.id]?.text ?? '').trim() !== '';
+    if (!confirm(`Delete ${b.title ? `"${b.title}"` : 'this box'}${hasText ? ' and what is written in it' : ''}?`)) return;
+    mutate((d) => { const x = d.boxes.find((y) => y.id === b.id); if (x) { x.deleted = true; x.modified = Date.now(); } });
+  }
   else if (act === 'edit-item') openItem(data.schedule.find((i) => i.id === el.dataset.id), false);
   else if (act === 'toggle-log') { ui.logging = !ui.logging; render(); if (ui.logging) $('[name=time]', view)?.focus(); }
   else if (act === 'del-workout') {
@@ -535,11 +743,27 @@ view.addEventListener('click', (e) => {
   } else if (act === 'sign-mode') { signMode = el.dataset.mode; view.innerHTML = renderSignIn(); }
 });
 
-// Notes save as you type (no redraw, so the cursor never jumps).
+// Notes, box titles and hours save as you type (no redraw, so the cursor never jumps).
 let noteTimer;
+const timers = {};                               // one save timer per box title / hours field
 view.addEventListener('input', (e) => {
   const t = e.target;
-  if (t.dataset.note) {
+  if (t.dataset.boxTitle) {
+    const id = t.dataset.boxTitle, title = t.textContent.replace(/\s+/g, ' ').trim().slice(0, 40);
+    clearTimeout(timers[`t${id}`]);
+    timers[`t${id}`] = setTimeout(() => mutate((d) => { const b = d.boxes.find((x) => x.id === id); if (b) { b.title = title; b.modified = Date.now(); } }, { redraw: false }), 300);
+  } else if (t.dataset.log) {
+    const f = t.dataset.log, key = t.dataset.day, text = t.value.trim();
+    const min = text === '' ? null : L.parseHours(text);
+    const bad = text !== '' && (min == null || min > 24 * 60);
+    t.classList.toggle('bad', bad);
+    clearTimeout(timers[`l${key}${f}`]);
+    if (bad) return;
+    timers[`l${key}${f}`] = setTimeout(() => mutate((d) => {
+      d.log ??= {};
+      d.log[key] = { ...d.log[key], [f]: { min, modified: Date.now() } };
+    }, { redraw: false }), 300);
+  } else if (t.dataset.note) {
     const k = t.dataset.note, text = t.value;
     clearTimeout(noteTimer);
     noteTimer = setTimeout(() => mutate((d) => { d.notes[k] = { text, modified: Date.now() }; }, { redraw: false }), 300);
@@ -569,6 +793,11 @@ view.addEventListener('submit', async (e) => {
   }
 });
 
+// A box title is one line: Enter just finishes it.
+view.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.dataset?.boxTitle) { e.preventDefault(); e.target.blur(); }
+});
+
 // Swipe right → previous week/month/year, swipe left → next.
 let touch = null;
 view.addEventListener('touchstart', (e) => { touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
@@ -586,8 +815,10 @@ view.addEventListener('touchend', (e) => {
 
 // ---------- add / edit activity sheet ----------
 const sheet = $('#sheet');
-function openItem(item, isNew) {
+function openItem(item, isNew, { remember = false } = {}) {
   if (!item) return;
+  const tKey = L.dayKey(today());
+  const day = item.day ?? tKey;
   let kind = L.isTodo(item) ? 'todo' : 'schedule';
   const span = Number.isFinite(item.span) ? L.fmtSpan(item.span).replace(' min', '') : '';
   sheet.innerHTML = `<form class="panel" data-form="item" autocomplete="off">
@@ -599,6 +830,7 @@ function openItem(item, isNew) {
       </div>
     </div>
     <input class="field" name="title" placeholder="Activity" aria-label="Activity" value="${esc(item.title)}" required>
+    <div class="row-head">${label('DAY')}<input class="field" type="date" name="day" aria-label="Day" value="${day}"${day >= tKey ? ` min="${tKey}"` : ''} required></div>
     <div class="row-head" data-for="schedule">${label('COMPLETE BY')}<input class="field" type="time" name="due" aria-label="Complete by" value="${L.fmtTime(item.due ?? 18 * 60)}"></div>
     <div class="row-head" data-for="todo">${label('TIME IT TAKES')}<input class="field num-field" name="span" inputmode="numeric" placeholder="45" aria-label="Time it takes" value="${esc(span)}" style="width:120px"></div>
     <div class="err" role="alert"></div>
@@ -621,7 +853,8 @@ function openItem(item, isNew) {
     e.preventDefault();
     const title = field('title').value.trim();
     if (!title) return;
-    const next = { ...item, title, kind, modified: Date.now(), deleted: false };
+    const next = { ...item, title, kind, day: field('day').value || day, modified: Date.now(), deleted: false };
+    if (next.day < tKey && next.day !== item.day) { f.querySelector('.err').textContent = `${dShort(L.parseDay(next.day))} is over`; return; }
     if (kind === 'schedule') {
       const [h, m] = (field('due').value || '18:00').split(':').map(Number);
       next.due = h * 60 + m;
@@ -631,6 +864,7 @@ function openItem(item, isNew) {
       if (text && (minutes == null || minutes > 24 * 60)) { f.querySelector('.err').textContent = 'Use 45, 1:30 or 1h30'; return; }
       next.span = minutes;
     }
+    if (isNew && remember) keep('perf-kind', kind);   // the + button opens on the same choice next time
     closeSheet();
     mutate((d) => {
       const i = d.schedule.findIndex((x) => x.id === item.id);
@@ -671,7 +905,19 @@ document.addEventListener('visibilitychange', () => {
   data = L.housekeep(data, now);
   render();
   Cloud.refresh();
+  // Back from the Santé Shortcut: its numbers land a few seconds later.
+  if (Date.now() - healthRunAt < 3 * 60e3) for (const ms of [3000, 8000, 15000]) setTimeout(() => Cloud.refresh(), ms);
 });
+
+/** Reload button: everything again from the server now (calendar skips its 5-minute cache). */
+async function reloadAll() {
+  if (ui.reloading) return;
+  ui.reloading = true; render();
+  const started = Date.now();
+  try { await Cloud.refresh({ fresh: true }); } catch { /* offline: keep what we have */ }
+  await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+  ui.reloading = false; render();
+}
 
 // ============================================================================
 // start: draw from this device first (instant), then sync
@@ -681,7 +927,7 @@ Cloud.start({
   onRemote: receive,
   onHealth: (rows) => { health = rows; keep('perf-health', rows); if (ui.tab === 'stats') render(); },
   onEvents: (ev) => { events = ev; keep('perf-events', ev); if (ui.tab === 'today') render(); },
-  onBirthdays: (rows) => { birthdays = rows; keep('perf-birthdays', rows); if (ui.tab === 'today') render(); },
+  onBirthdays: (rows) => { birthdays = rows; keep('perf-birthdays', rows); if (ui.tab !== 'stats') render(); },
   onChange: () => render(),
 });
 

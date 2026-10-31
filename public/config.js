@@ -13,4 +13,6 @@
 window.PERF_CONFIG = {
   supabaseUrl: 'https://efcwwwmoflkrzgcluqii.supabase.co',
   supabaseKey: 'sb_publishable_zbtx_FHQxzDOA8iO7Oj1zQ_Jb9XKMNg',
+  // Name of the iPhone Shortcut that sends the Santé numbers (run by the reload button in Stats → Santé).
+  healthShortcut: 'Send Santé',
 };
