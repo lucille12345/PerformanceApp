@@ -211,10 +211,30 @@ function renderToday() {
 function taskRow(i, rec, tickable = true) {
   const on = L.isDone(rec, i.id);
   const sub = L.isTodo(i) ? (Number.isFinite(i.span) ? L.fmtSpan(i.span) : '') : `by ${L.fmtTime(i.due)}`;
-  return `<div class="task${on ? ' done' : ''}">
-    <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span>${sub ? `<span class="small">${sub}</span>` : ''}</button>
-    <button class="check" data-act="tick" data-id="${i.id}" data-day="${i.day}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"${tickable ? '' : ' disabled'}><i>${I.check}</i></button>
+  return `<div class="swipe" data-swipe="${i.id}">
+    <button class="swipe-del" data-act="del-item" data-id="${i.id}" tabindex="-1" aria-label="Delete ${esc(i.title)}">DELETE</button>
+    <div class="task${on ? ' done' : ''}">
+      <button class="body" data-act="edit-item" data-id="${i.id}"><span class="title">${esc(i.title)}</span>${sub ? `<span class="small">${sub}</span>` : ''}</button>
+      <button class="check" data-act="tick" data-id="${i.id}" data-day="${i.day}" aria-label="${on ? 'Untick' : 'Tick'} ${esc(i.title)}" aria-pressed="${on}"${tickable ? '' : ' disabled'}><i>${I.check}</i></button>
+    </div>
   </div>`;
+}
+
+/** Deletes an activity (swipe left, or the DELETE behind it). */
+function deleteItem(id) {
+  mutate((d) => { const x = d.schedule.find((i) => i.id === id); if (x) { x.deleted = true; x.modified = Date.now(); } });
+  if (calOpen && !sheet.hidden) openCalendar(calOpen.sel, calOpen.first);   // keep the calendar up to date
+}
+
+/** Ticks / unticks one of today's activities. */
+function tick(id, day) {
+  const key = L.dayKey(today());
+  if (day && day !== key) return;                // only today's activities can be ticked
+  mutate((d) => {
+    const rec = d.days[key] ?? { key, items: {}, ticks: {} };
+    rec.ticks[id] = { done: !L.isDone(rec, id), modified: Date.now() };
+    d.days[key] = rec;
+  });
 }
 
 // Hours typed by hand each day: work, sport, time on the phone.
@@ -261,7 +281,7 @@ function renderCalendar() {
   } else if (!special.length) body += row('var(--faint)', '', Cloud.state().enabled ? 'Nothing today' : 'Not connected', null);
   const n = list.length + special.length;
   return `<section class="card cal">
-    <div class="row-head">${label('CALENDAR')}
+    <div class="row-head"><button class="label-btn" data-act="open-cal" aria-label="Open calendar">${label('CALENDAR')}</button>
       <div class="tools">${n ? `<span class="small">${n} today</span>` : ''}
         <button class="mini${ui.reloading ? ' spin' : ''}" data-act="reload" aria-label="Reload calendar">${I.reload}</button>
         <button class="mini" data-act="add-item" data-day="${L.dayKey(today())}" data-from="calendar" aria-label="Add to a day">${I.plus}</button>
@@ -698,14 +718,10 @@ view.addEventListener('click', (e) => {
   if (!el) return;
   const act = el.dataset.act;
   if (act === 'tick') {
-    const key = L.dayKey(today());
-    if (el.disabled || (el.dataset.day && el.dataset.day !== key)) return;   // only today's activities can be ticked
-    mutate((d) => {
-      const rec = d.days[key] ?? { key, items: {}, ticks: {} };
-      rec.ticks[el.dataset.id] = { done: !L.isDone(rec, el.dataset.id), modified: Date.now() };
-      d.days[key] = rec;
-    });
-  } else if (act === 'add-item') {
+    if (!el.disabled) tick(el.dataset.id, el.dataset.day);
+  } else if (act === 'del-item') deleteItem(el.dataset.id);
+  else if (act === 'open-cal') openCalendar();
+  else if (act === 'add-item') {
     const fromCal = el.dataset.from === 'calendar';
     const kind = fromCal ? 'schedule' : load('perf-kind', 'schedule');
     openItem({ id: L.uid(), title: '', due: 18 * 60, kind, day: el.dataset.day || L.dayKey(today()) }, true, { remember: !fromCal });
@@ -800,7 +816,7 @@ view.addEventListener('keydown', (e) => {
 
 // Swipe right → previous week/month/year, swipe left → next.
 let touch = null;
-view.addEventListener('touchstart', (e) => { touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+view.addEventListener('touchstart', (e) => { touch = e.target.closest('.swipe') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
 view.addEventListener('touchend', (e) => {
   if (!touch || ui.tab === 'today') return;
   const dx = e.changedTouches[0].clientX - touch.x, dy = e.changedTouches[0].clientY - touch.y;
@@ -815,7 +831,7 @@ view.addEventListener('touchend', (e) => {
 
 // ---------- add / edit activity sheet ----------
 const sheet = $('#sheet');
-function openItem(item, isNew, { remember = false } = {}) {
+function openItem(item, isNew, { remember = false, onDone = null } = {}) {
   if (!item) return;
   const tKey = L.dayKey(today());
   const day = item.day ?? tKey;
@@ -870,20 +886,134 @@ function openItem(item, isNew, { remember = false } = {}) {
       const i = d.schedule.findIndex((x) => x.id === item.id);
       if (i >= 0) d.schedule[i] = next; else d.schedule.push(next);
     });
+    onDone?.(next.day);
   });
   f.addEventListener('click', (e) => {
     const k = e.target.closest('[data-kind]')?.dataset.kind;
     if (k) { kind = k; showKind(); return; }
     const a = e.target.closest('[data-sheet]')?.dataset.sheet;
-    if (a === 'close') closeSheet();
+    if (a === 'close') { closeSheet(); onDone?.(day); }
     if (a === 'delete') {
       closeSheet();
       mutate((d) => { const x = d.schedule.find((i) => i.id === item.id); if (x) { x.deleted = true; x.modified = Date.now(); } });
+      onDone?.(day);
     }
   });
 }
 
-function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; }
+function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; calOpen = null; }
+
+// ---------- swipe left on an activity: a short swipe shows DELETE, a long one deletes ----------
+const SWIPE_OPEN = 96;
+let sw = null;            // the swipe in progress
+let swOpen = null;        // the row currently showing DELETE
+let swClickBlock = 0;     // a drag must not also count as a tap
+const rowOf = (el) => el.querySelector('.task');
+function setX(wrap, x, animate) {
+  const t = rowOf(wrap);
+  t.style.transition = animate ? 'transform .2s ease-out' : 'none';
+  t.style.transform = x ? `translateX(${x}px)` : '';
+}
+function closeOpenRow(except) { if (swOpen && swOpen !== except) { setX(swOpen, 0, true); swOpen = null; } }
+document.addEventListener('pointerdown', (e) => {
+  const wrap = e.target.closest('.swipe');
+  if (!wrap || e.target.closest('.swipe-del')) { if (!e.target.closest('.swipe-del')) closeOpenRow(); return; }
+  closeOpenRow(wrap);
+  sw = { wrap, id: wrap.dataset.swipe, x: e.clientX, y: e.clientY, base: swOpen === wrap ? -SWIPE_OPEN : 0, dx: 0, dir: null, pid: e.pointerId };
+});
+document.addEventListener('pointermove', (e) => {
+  if (!sw || e.pointerId !== sw.pid) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+  if (!sw.dir) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    sw.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    if (sw.dir === 'v') { sw = null; return; }
+    try { sw.wrap.setPointerCapture(e.pointerId); } catch { /* not all browsers */ }
+  }
+  sw.dx = dx;
+  setX(sw.wrap, Math.min(0, sw.base + dx), false);
+});
+function endSwipe(e) {
+  if (!sw || e.pointerId !== sw.pid) return;
+  const { wrap, id, base, dx, dir } = sw;
+  sw = null;
+  if (dir !== 'h') return;
+  swClickBlock = Date.now();
+  const x = base + dx;
+  if (x < -wrap.offsetWidth * 0.45) {                       // long swipe: gone
+    swOpen = null;
+    setX(wrap, -wrap.offsetWidth, true);
+    setTimeout(() => deleteItem(id), 180);
+  } else if (x < -SWIPE_OPEN / 2) { setX(wrap, -SWIPE_OPEN, true); swOpen = wrap; }
+  else { setX(wrap, 0, true); if (swOpen === wrap) swOpen = null; }
+}
+document.addEventListener('pointerup', endSwipe);
+document.addEventListener('pointercancel', endSwipe);
+document.addEventListener('click', (e) => {
+  if (Date.now() - swClickBlock < 350 && e.target.closest('.swipe')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+
+// ---------- calendar: tap CALENDAR → a month; tap a day → its plan, + adds to it ----------
+let calOpen = null;        // { sel, first } while the calendar sheet is showing
+function openCalendar(sel = today(), first = L.startOfMonth(sel)) {
+  calOpen = { sel, first };
+  const t = today();
+  const days = L.daysInMonth(first);
+  const lead = (first.getDay() + 6) % 7;
+  const key = L.dayKey(sel);
+  const ahead = sel >= t;
+  const rec = data.days[key];
+  const items = L.itemsOn(data, key);
+  const pastItems = !ahead && rec ? Object.entries(rec.items).sort((a, b) => a[1].localeCompare(b[1])) : [];
+  const special = [
+    ...birthdaysOn(sel).map((b) => `<div class="ditem sp"><svg viewBox="0 0 24 24" class="ico" style="color:#FF6F8A" role="img" aria-label="Birthday">${I.cake}</svg><span>${esc(b.age != null ? `${b.name} · ${b.age}` : b.name)}</span></div>`),
+    ...holidaysOn(sel).map((h) => `<div class="ditem sp"><svg viewBox="0 0 24 24" class="ico" style="color:${KINDS[h.kind].color}" role="img" aria-label="${KINDS[h.kind].label}">${I.star}</svg><span>${esc(h.name)}</span></div>`),
+  ].join('');
+  const circle = (d) => {
+    const st = L.status(data, d, now);
+    const planned = st === 'future' && L.itemsOn(data, L.dayKey(d)).length ? ' planned' : '';
+    const bday = birthdaysOn(d).length ? '<i class="bd"></i>' : '';
+    return `<button data-cal-day="${L.dayKey(d)}" aria-label="${d.getDate()} ${MONTH[d.getMonth()]}"><span class="dc ${st}${L.sameDay(d, sel) ? ' sel' : ''}${planned}">${d.getDate()}</span>${bday}</button>`;
+  };
+  sheet.innerHTML = `<div class="panel calp" role="dialog" aria-label="Calendar">
+    <div class="nav">
+      <button class="arrow" data-cal-nav="-1" aria-label="Previous month">${I.left}</button>
+      <div class="num">${MONTH[first.getMonth()]} ${first.getFullYear()}</div>
+      <button class="arrow" data-cal-nav="1" aria-label="Next month">${I.right}</button>
+    </div>
+    <div class="month">
+      ${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w) => `<span class="dow">${w}</span>`).join('')}
+      ${'<span></span>'.repeat(lead)}
+      ${days.map(circle).join('')}
+    </div>
+    <div class="calday">
+      <div class="row-head">${label(`${DOW[sel.getDay()].slice(0, 3)} ${dShort(sel)}`)}
+        ${ahead ? `<button class="add" data-cal-add="${key}" aria-label="Add to ${dShort(sel)}">${I.plus}</button>` : ''}</div>
+      ${special}
+      ${ahead ? items.map((i) => taskRow(i, rec, L.sameDay(sel, t))).join('')
+        : pastItems.map(([id, title]) => `<div class="ditem${L.isDone(rec, id) ? ' on' : ''}"><i>${I.check}</i><span>${esc(title)}</span></div>`).join('')}
+      ${!special && !(ahead ? items.length : pastItems.length) ? '<div class="empty">No data</div>' : ''}
+    </div>
+  </div>`;
+  sheet.hidden = false;
+  const back = (d) => openCalendar(d ? L.parseDay(d) : sel);
+  sheet.firstElementChild.addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-cal-nav]');
+    if (nav) { const m = L.addMonths(first, Number(nav.dataset.calNav)); openCalendar(L.sameDay(L.startOfMonth(t), m) ? t : m, m); return; }
+    const day = e.target.closest('[data-cal-day]');
+    if (day) { openCalendar(L.parseDay(day.dataset.calDay), first); return; }
+    const add = e.target.closest('[data-cal-add]');
+    if (add) {
+      openItem({ id: L.uid(), title: '', due: 18 * 60, kind: load('perf-kind', 'schedule'), day: add.dataset.calAdd }, true, { remember: true, onDone: back });
+      return;
+    }
+    const el = e.target.closest('[data-act]');
+    if (!el) return;
+    if (el.dataset.act === 'edit-item') openItem(data.schedule.find((i) => i.id === el.dataset.id), false, { onDone: back });
+    else if (el.dataset.act === 'tick' && !el.disabled) { tick(el.dataset.id, el.dataset.day); openCalendar(sel, first); }
+    else if (el.dataset.act === 'del-item') deleteItem(el.dataset.id);
+  });
+}
 sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
 

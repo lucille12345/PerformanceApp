@@ -322,3 +322,15 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .srow .num { font-size: 15px; }
 .srow.th span { color: var(--health-muted); font-size: 9px; }
 .health .vbars small { color: var(--health-muted); }
+
+/* ---------- swipe left to delete, calendar sheet ---------- */
+.swipe { position: relative; overflow: hidden; }
+.swipe .task { position: relative; background: var(--card); touch-action: pan-y; }
+.swipe-del { position: absolute; top: 0; right: 0; bottom: 1px; width: 96px; background: var(--red); color: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px; }
+.label-btn { display: flex; align-items: center; min-height: 32px; text-align: left; }
+.sheet .panel.calp { gap: 12px; max-height: 92dvh; overflow-y: auto; }
+.calp .month button { position: relative; }
+.calp .month .bd { position: absolute; bottom: 2px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #FF6F8A; }
+.calday { border-top: 1px solid var(--line); padding-top: 12px; }
+.calday .row-head { padding-bottom: 6px; }

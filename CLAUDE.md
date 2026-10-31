@@ -41,6 +41,8 @@ duration `span` in minutes, no due time; listed after schedule items). Chosen in
 - Reload buttons: calendar box (refetch, calendar with `fresh=1` = no 5-min cache) and Santé (on iPhone also runs
   the Shortcut named `healthShortcut` in `config.js` through `shortcuts://run-shortcut`).
 - Santé in Stats: DAY (latest row) / 7 DAYS / MONTH (the original monthly view).
+- Activities: swipe left = DELETE button, long swipe = deleted (`.swipe` rows, pointer events in `app.js`).
+  Tapping the word CALENDAR opens a month sheet (`openCalendar`): tap a day → its plan, + adds to that day.
 
 ## Test locally
 `python3 -m http.server 8790 -d public` (launch config "performance"). Functions don't run locally;
